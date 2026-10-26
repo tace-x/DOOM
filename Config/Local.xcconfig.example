@@ -1,0 +1,6 @@
+// Local.xcconfig.example
+// Copy to Local.xcconfig and fill in your development team identifier.
+// Local.xcconfig is git-ignored and holds personal/machine-specific signing settings.
+
+DEVELOPMENT_TEAM = 
+CODE_SIGN_IDENTITY = Apple Development

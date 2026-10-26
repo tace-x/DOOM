@@ -1,0 +1,333 @@
+// !$*UTF8*$!
+// Deterministic Object IDs for DOOM.xcodeproj:
+// D00000000000000000000001: Project
+// D00000000000000000000002: MainGroup
+// D00000000000000000000003: Synchronized Root Group (DOOM)
+// D00000000000000000000004: FileReference (Config/DOOM.xcconfig)
+// D00000000000000000000005: NativeTarget (DOOM)
+// D00000000000000000000006: SourcesBuildPhase
+// D00000000000000000000007: FrameworksBuildPhase
+// D00000000000000000000008: ResourcesBuildPhase
+// D00000000000000000000009: LocalSwiftPackageReference (DoomKit)
+// D0000000000000000000000A: SwiftPackageProductDependency (DoomCore)
+// D0000000000000000000000B: SwiftPackageProductDependency (DoomFeatures)
+// D0000000000000000000000C: BuildFile (DoomCore in Frameworks)
+// D0000000000000000000000D: BuildFile (DoomFeatures in Frameworks)
+// D0000000000000000000000E: ConfigurationList (Target)
+// D0000000000000000000000F: BuildConfiguration (Target Debug)
+// D00000000000000000000010: BuildConfiguration (Target Release)
+// D00000000000000000000011: ConfigurationList (Project)
+// D00000000000000000000012: BuildConfiguration (Project Debug)
+// D00000000000000000000013: BuildConfiguration (Project Release)
+// D00000000000000000000014: FileReference (DOOM.app product)
+// D00000000000000000000015: Products Group
+// D00000000000000000000016: SwiftPackageProductDependency (DoomServices)
+// D00000000000000000000017: BuildFile (DoomServices in Frameworks)
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D0000000000000000000000C /* DoomCore in Frameworks */ = {isa = PBXBuildFile; productRef = D0000000000000000000000A /* DoomCore */; };
+		D0000000000000000000000D /* DoomFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = D0000000000000000000000B /* DoomFeatures */; };
+		D00000000000000000000017 /* DoomServices in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000016 /* DoomServices */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		D00000000000000000000004 /* DOOM.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = DOOM.xcconfig; path = Config/DOOM.xcconfig; sourceTree = "<group>"; };
+		D00000000000000000000014 /* DOOM.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DOOM.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D00000000000000000000003 /* DOOM */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = DOOM;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D00000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D0000000000000000000000C /* DoomCore in Frameworks */,
+				D0000000000000000000000D /* DoomFeatures in Frameworks */,
+				D00000000000000000000017 /* DoomServices in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D00000000000000000000002 /* MainGroup */ = {
+			isa = PBXGroup;
+			children = (
+				D00000000000000000000003 /* DOOM */,
+				D00000000000000000000004 /* DOOM.xcconfig */,
+				D00000000000000000000015 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D00000000000000000000015 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D00000000000000000000014 /* DOOM.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D00000000000000000000005 /* DOOM */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0000000000000000000000E /* Build configuration list for PBXNativeTarget "DOOM" */;
+			buildPhases = (
+				D00000000000000000000006 /* Sources */,
+				D00000000000000000000007 /* Frameworks */,
+				D00000000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D00000000000000000000003 /* DOOM */,
+			);
+			name = DOOM;
+			packageProductDependencies = (
+				D0000000000000000000000A /* DoomCore */,
+				D0000000000000000000000B /* DoomFeatures */,
+				D00000000000000000000016 /* DoomServices */,
+			);
+			productName = DOOM;
+			productReference = D00000000000000000000014 /* DOOM.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = D00000000000000000000011 /* Build configuration list for PBXProject "DOOM" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D00000000000000000000002 /* MainGroup */;
+			packageReferences = (
+				D00000000000000000000009 /* DoomKit */,
+			);
+			productRefGroup = D00000000000000000000015 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D00000000000000000000005 /* DOOM */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D00000000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D00000000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D0000000000000000000000F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D00000000000000000000004 /* DOOM.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		D00000000000000000000010 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D00000000000000000000004 /* DOOM.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		D00000000000000000000012 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDEFINED_VARIABLES = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		D00000000000000000000013 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDEFINED_VARIABLES = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = "wholemodule";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D0000000000000000000000E /* Build configuration list for PBXNativeTarget "DOOM" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0000000000000000000000F /* Debug */,
+				D00000000000000000000010 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D00000000000000000000011 /* Build configuration list for PBXProject "DOOM" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D00000000000000000000012 /* Debug */,
+				D00000000000000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D00000000000000000000009 /* DoomKit */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = DoomKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D0000000000000000000000A /* DoomCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D00000000000000000000009 /* DoomKit */;
+			productName = DoomCore;
+		};
+		D0000000000000000000000B /* DoomFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D00000000000000000000009 /* DoomKit */;
+			productName = DoomFeatures;
+		};
+		D00000000000000000000016 /* DoomServices */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D00000000000000000000009 /* DoomKit */;
+			productName = DoomServices;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D00000000000000000000001 /* Project object */;
+}

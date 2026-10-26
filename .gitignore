@@ -1,0 +1,21 @@
+.DS_Store
+/build
+build
+.build
+.swiftpm
+xcuserdata/
+*.xcuserstate
+DerivedData/
+Config/Local.xcconfig
+.env
+.env.*
+*.p12
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+*.log
+
+# Pre-existing workspace folders not part of the active DOOM project
+doom-phase01/
+phase03-audit/
