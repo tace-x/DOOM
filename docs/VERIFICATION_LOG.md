@@ -1169,3 +1169,21 @@ Never record secrets, selected text, responses, Apple ID, full team ID, serial n
 - Result: PASS
 
 
+
+---
+
+### 2026-10-26 15:27 — Phase 4 & Phase 5 — Alternative Window & Capture Architecture Investigation
+- Build: Debug & Release 0.1.0(1), git checkpoint 470c810
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Command(s): `swift scripts/architecture-evaluation.swift; ./scripts/verify.sh`
+- Exit code(s): 0, 0
+- Counts: 5 architectures evaluated; 130 unit tests passed across 20 suites; builds OK; bundles OK; smoke tests OK.
+- Evidence excerpt:
+  Architecture A (Floating Panel, current): WindowServer Layer 3; panel excluded by window/tab share SCContentFilter; orderOut(nil) removes panel entirely; sharingType.none ineffective (confirmed again).
+  Architecture B (Helper Process / XPC): NSXPCConnection available. WindowServer layers by window level not process — zero capture privacy benefit over Architecture A.
+  Architecture C (Menu-Bar Only): NSStatusItem available. No window surface when menu closed; severely limited UX for multi-paragraph responses.
+  Architecture D (Separate Display): Active displays=1. Single-display Spaces provide no exclusion. Second display approach not available on this hardware.
+  Architecture E (Supported Controls): Window/Tab WebRTC share excludes panel via SCContentFilter(desktopIndependentWindow:). Control+Shift+H orderOut excludes panel from all captures. No private SPI used. Both paths confirmed as documented supported options on macOS 14+/27+.
+  Full verify.sh: ALL CHECKS PASSED (exit 0).
+- Result: PASS

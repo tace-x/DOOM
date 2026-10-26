@@ -6,7 +6,7 @@
 | **Created** | 2026-10-24 (Phase 03 handoff) |
 | **Status values** | NOT STARTED · IN PROGRESS · BLOCKED (name the blocker and who can clear it) · DONE (only per the completion rule, `ACCEPTANCE_CRITERIA.md` §11) |
 
-**Current state:** Milestones M00, M01, M03a, M02, M03b, M04a, and M04b are **DONE**. Milestone **M05** (Keychain and Gemini integration) is **PARTIAL** (All automated criteria pass; live provider verification awaits user key entry). Next milestone is **M06** (End-to-end assistant flow).
+**Current state:** Milestones M00, M01, M03a, M02, M03b, M04a, and M04b are **DONE**. Milestone **M05** (Keychain and Gemini integration) is **PARTIAL** (All automated criteria pass; live provider verification awaits user key entry). **Alternative window & capture architecture investigation (Phase 4 & 5) is COMPLETE** — see `docs/ARCHITECTURE_INVESTIGATION.md`. Next milestone is **M06** (End-to-end assistant flow).
 
 ---
 
@@ -53,7 +53,7 @@
 | SHORTCUT-RM-02 (Normal typing test) | 2026-10-25 02:20, 0.1.0(1) | No |
 | SHORTCUT-RM-03 (Globe key side effect test) | 2026-10-25 02:20, 0.1.0(1) | No |
 | SHORTCUT-RM-07 (Control+Shift+H hotkey) | 2026-10-26 14:45, 0.1.0(1) | Yes (improved release tracking & debouncing) |
-| SEC-RM-03 (Screen capture behavior investigation) | 2026-10-26 14:45, 0.1.0(1) | Verified via `scripts/screen-capture-test.swift` |
+| SEC-RM-03 (Screen capture behavior investigation) | 2026-10-26 15:27, 0.1.0(1) | Phase 4 & 5 COMPLETE — see `docs/ARCHITECTURE_INVESTIGATION.md` |
 | TEXT-RM-01 (TextEdit native selection) | 2026-10-25 02:42, 0.1.0(1) | No |
 | TEXT-RM-02 (Chrome web-page selection) | 2026-10-25 02:35, 0.1.0(1) | No |
 | TEXT-RM-03 (Chrome textarea selection) | 2026-10-25 02:35, 0.1.0(1) | No |
