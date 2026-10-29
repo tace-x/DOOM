@@ -201,10 +201,28 @@ public enum MessageCatalog {
                 isRetryable: false,
                 isWarning: true
             )
-        case .clipboardCopyFailed:
+        case .editorSelectionUnavailable:
+            return MessagePresentation(
+                id: "E-SEL-11",
+                title: "Editor selection unavailable",
+                message: "DOOM can't read code selected in this editor via Accessibility. Turn on Copy Fallback in DOOM Settings to acquire it.",
+                actions: [.openSettings, .close],
+                isRetryable: false,
+                isWarning: true
+            )
+        case .clipboardFallbackDisabled:
+            return MessagePresentation(
+                id: "E-SEL-12",
+                title: "Copy Fallback disabled",
+                message: "DOOM couldn't read the selection in \(app) with Accessibility, and Copy Fallback is turned off. Enable it in DOOM Settings to read code from this editor.",
+                actions: [.openSettings, .close],
+                isRetryable: false,
+                isWarning: true
+            )
+        case .clipboardCopyFailed, .selectionRetrievalFailed:
             return MessagePresentation(
                 id: "E-SEL-07",
-                title: "Copy didn't work",
+                title: "Selection retrieval failed",
                 message: "\(app) didn't copy the selection, so there's nothing to send.",
                 actions: [.close],
                 isRetryable: false,

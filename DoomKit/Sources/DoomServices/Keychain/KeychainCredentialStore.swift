@@ -3,7 +3,7 @@ import Security
 import DoomCore
 import OSLog
 
-private let logger = Logger(subsystem: "com.tace.doom", category: "keychain")
+private let logger = Logger(subsystem: "doom", category: "keychain")
 
 public protocol KeychainRawProviding: Sendable {
     func itemCopyMatching(_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
@@ -38,7 +38,7 @@ public final class KeychainCredentialStore: CredentialStoring, Sendable {
     private let provider: any KeychainRawProviding
 
     public init(
-        service: String = Bundle.main.bundleIdentifier ?? "com.tace.doom",
+        service: String,
         account: String = "gemini-api-key",
         provider: any KeychainRawProviding = SystemKeychainRawProvider()
     ) {

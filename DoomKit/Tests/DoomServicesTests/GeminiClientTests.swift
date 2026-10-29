@@ -696,4 +696,80 @@ struct GeminiClientTests {
         #expect(diag?.sanitizedProviderErrorCode == "service_unavailable")
         #expect(diag?.sanitizedProviderErrorMessage == expectedMsg)
     }
+
+    @Test("HARDEN-04: HTTP 429 parses lowercase retry-after header correctly")
+    func testCaseInsensitiveRetryAfterHeader() async {
+        StubURLProtocol.requestHandler = { req in
+            let json = """
+            {
+              "error": {
+                "code": 429,
+                "message": "Resource exhausted",
+                "status": "RESOURCE_EXHAUSTED"
+              }
+            }
+            """
+            // Send lowercase "retry-after" as commonly emitted by HTTP/2 proxies
+            let headers = ["retry-after": "7"]
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 429, httpVersion: "HTTP/2", headerFields: headers)!
+            return (resp, Data(json.utf8))
+        }
+
+        let client = makeTestClient()
+        do {
+            _ = try await client.respond(to: makeSampleRequest(), apiKey: validAPIKey)
+            Issue.record("Expected quotaExceeded error")
+        } catch {
+            #expect(error == .quotaExceeded)
+        }
+
+        // Test with non-quota rate limit to check retryAfter duration parsing
+        StubURLProtocol.requestHandler = { req in
+            let json = """
+            {
+              "error": {
+                "code": 429,
+                "message": "Too many requests",
+                "status": "RATE_LIMIT_EXCEEDED"
+              }
+            }
+            """
+            let headers = ["retry-after": "7"]
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 429, httpVersion: "HTTP/2", headerFields: headers)!
+            return (resp, Data(json.utf8))
+        }
+
+        do {
+            _ = try await client.respond(to: makeSampleRequest(), apiKey: validAPIKey)
+            Issue.record("Expected rateLimited error")
+        } catch {
+            #expect(error == .rateLimited(retryAfter: .seconds(7)))
+        }
+    }
+
+    @Test("HARDEN-05: Proxy or gateway string error payload parsed without decoding error")
+    func testProxyStringErrorPayload() async {
+        StubURLProtocol.requestHandler = { req in
+            let json = """
+            {
+              "message": "Bad Gateway from upstream proxy"
+            }
+            """
+            let resp = HTTPURLResponse(url: req.url!, statusCode: 502, httpVersion: nil, headerFields: nil)!
+            return (resp, Data(json.utf8))
+        }
+
+        let client = makeTestClient()
+        do {
+            _ = try await client.respond(to: makeSampleRequest(), apiKey: validAPIKey)
+            Issue.record("Expected server(status: 502) error")
+        } catch {
+            #expect(error == .server(status: 502))
+        }
+
+        let diag = client.lastDiagnostics
+        #expect(diag?.httpStatusCode == 502)
+        #expect(diag?.sanitizedProviderErrorMessage == "Bad Gateway from upstream proxy")
+    }
 }
+

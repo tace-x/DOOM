@@ -50,7 +50,7 @@ public final class SystemShortcutMonitor: ShortcutMonitoring {
     #endif
 
     private var isStarted: Bool = false
-    private let logger = Logger(subsystem: "com.tace.doom", category: "shortcuts")
+    private let logger = Logger(subsystem: "doom", category: "shortcuts")
 
     public init(permissions: any PermissionChecking) {
         self.permissions = permissions

@@ -4,7 +4,8 @@ public enum SelectionValidator {
     public static func validate(
         _ raw: String,
         source: SourceApplication,
-        method: AcquisitionMethod
+        method: AcquisitionMethod,
+        restoreSkipped: Bool = false
     ) throws(TextAcquisitionError) -> SelectedText {
         // Rule 1: Remove U+0000 (NUL) characters
         let sanitized = raw.replacingOccurrences(of: "\0", with: "")
@@ -27,7 +28,8 @@ public enum SelectionValidator {
             value: trimmed,
             characterCount: count,
             source: source,
-            method: method
+            method: method,
+            restoreSkipped: restoreSkipped
         )
     }
 }

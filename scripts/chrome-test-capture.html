@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chrome Screen Capture Diagnostic</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #111; color: #eee; padding: 20px; }
+        video, canvas { border: 1px solid #444; max-width: 800px; display: block; margin-top: 10px; }
+        #status { font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Chrome Screen Capture Diagnostic (dev-only)</h1>
+    <button id="startBtn">Start Entire Screen Share</button>
+    <div id="status">Ready</div>
+    <video id="preview" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const status = document.getElementById('status');
+        const video = document.getElementById('preview');
+        const canvas = document.getElementById('canvas');
+
+        startBtn.onclick = async () => {
+            try {
+                status.innerText = "Requesting display media...";
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { displaySurface: "monitor" },
+                    audio: false
+                });
+                video.srcObject = stream;
+                status.innerText = "Stream active. Analyzing frames...";
+
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    setInterval(analyzeFrame, 500);
+                };
+            } catch (err) {
+                status.innerText = "Error: " + err.message;
+            }
+        };
+
+        function analyzeFrame() {
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Sample pixels across window coordinates (200, 200, 300, 300)
+            // On Retina 2x: x: ~400-1000, y: ~400-1000
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = imgData.data;
+
+            // Search for bright magenta pixels (R > 220, G < 50, B > 220)
+            let magentaCount = 0;
+            let cyanCount = 0;
+            for (let i = 0; i < d.length; i += 16) { // step by 4 pixels
+                const r = d[i];
+                const g = d[i+1];
+                const b = d[i+2];
+                if (r > 200 && g < 60 && b > 200) {
+                    magentaCount++;
+                }
+                if (r < 60 && g > 200 && b > 200) {
+                    cyanCount++;
+                }
+            }
+
+            status.innerHTML = `Frame size: ${canvas.width}x${canvas.height} | Magenta pixels (marker): ${magentaCount} | Cyan pixels: ${cyanCount} | Result: ` + 
+                (magentaCount > 50 ? "<span style='color:red;'>MARKER INCLUDED IN CHROME CAPTURE</span>" : "<span style='color:lightgreen;'>MARKER EXCLUDED FROM CHROME CAPTURE</span>");
+        }
+    </script>
+</body>
+</html>

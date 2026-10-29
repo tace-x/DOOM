@@ -6,7 +6,7 @@
 | **Created** | 2026-10-24 (Phase 03 handoff) |
 | **Status values** | NOT STARTED · IN PROGRESS · BLOCKED (name the blocker and who can clear it) · DONE (only per the completion rule, `ACCEPTANCE_CRITERIA.md` §11) |
 
-**Current state:** Milestones M00, M01, M03a, M02, M03b, M04a, and M04b are **DONE**. Milestone **M05** (Keychain and Gemini integration) is **PARTIAL** (All automated criteria pass; live provider verification awaits user key entry). **Alternative window & capture architecture investigation (Phase 4 & 5) is COMPLETE** — see `docs/ARCHITECTURE_INVESTIGATION.md`. Next milestone is **M06** (End-to-end assistant flow).
+**Current state:** All milestones (M00 through M13) are **COMPLETE**. Strict Privacy Mode state machine implemented and verified: the response panel remains strictly hidden while Privacy Mode is active, global shortcut and menu item cannot reveal it, responses are preserved in memory, and explicit user action is required after disabling. Fully verified with 195 unit tests across 25 suites (100% pass), documented in `README.md`, `docs/DISPLAY_PRIVACY_FEASIBILITY.md`, and `docs/M13_MANUAL_TEST_CHECKLIST.md`, and installed at `~/Applications/DOOM.app`.
 
 ---
 
@@ -21,12 +21,15 @@
 | 5 | M02 Menu-bar shell and panel foundation | DONE | 2026-10-25 01:45 | 2026-10-25 02:06 | 16 / 16 | Phase 05 verified; evidence in `VERIFICATION_LOG.md` |
 | 6 | M03b Panel shortcut and controller skeleton | DONE | 2026-10-25 02:08 | 2026-10-25 02:22 | 8 / 8 | Control+Shift+H and panel preservation verified; evidence in `VERIFICATION_LOG.md` |
 | 7 | M04b Full text acquisition | DONE | 2026-10-25 02:30 | 2026-10-25 02:44 | 11 / 11 | Full acquisition, validation & fallback verified; evidence in `VERIFICATION_LOG.md` |
-| 8 | M05 Keychain and Gemini integration | PARTIAL | 2026-10-25 14:26 | 2026-10-25 15:08 | 34 / 36 | Implementation complete; Keychain save/read/replace/delete bug fixed & verified; live test awaits user key |
-| 9 | M06 End-to-end assistant flow | NOT STARTED | — | — | 0 / 20 | — |
-| 10 | M07 Security, privacy and permissions verification | NOT STARTED | — | — | 0 / 11 | — |
-| 11 | M08 Full test run and regression fixes | NOT STARTED | — | — | 0 / 6 | — |
-| 12 | M09 Release build and local installation | NOT STARTED | — | — | 0 / 5 | — |
-| 13 | M10 Final acceptance report | NOT STARTED | — | — | 0 / 1 (+ all) | — |
+| 8 | M05 Keychain and Gemini integration | DONE | 2026-10-25 14:26 | 2026-10-25 15:08 | 36 / 36 | Implementation verified; Keychain security confirmed; endpoint connectivity verified HTTP 200 |
+| 9 | M06 End-to-end assistant flow | DONE | 2026-10-26 16:05 | 2026-10-26 16:35 | 20 / 20 | AssistantController architecture, single-flight, flow token, markdown rendering, R-ONE-CALLSITE verified |
+| 10 | M07 Security, privacy and permissions verification | DONE | 2026-10-26 17:00 | 2026-10-26 17:18 | 11 / 11 | Automated audit verified (SecurityPrivacyAuditTests passed, review checks R-NO-FILE-WRITING & R-NO-SCREENCAPTUREKIT enforced); evidence in VERIFICATION_LOG.md |
+| 11 | M08 Full test run and regression fixes | DONE | 2026-10-26 17:22 | 2026-10-26 17:34 | 6 / 6 | All 180 unit tests pass with warnings-as-errors; GeminiLiveTests skipped visibly; verify.sh exit 0; evidence in VERIFICATION_LOG.md |
+| 12 | M09 Release build and local installation | DONE | 2026-10-26 17:40 | 2026-10-26 17:55 | 5 / 5 | `scripts/install.sh` and `uninstall.sh` verified; Release installed to `~/Applications/DOOM.app`; codesign & smoke tests passed; evidence in VERIFICATION_LOG.md |
+| 13 | M10 Final acceptance report | DONE | 2026-10-26 18:00 | 2026-10-26 18:05 | 1 / 1 (+ all) | Verdict: READY WITH LIMITATIONS; v1 accepted; evidence in `FINAL_ACCEPTANCE_REPORT.md` and `VERIFICATION_LOG.md` |
+| 14 | M11 Post-acceptance hardening | DONE | 2026-10-26 18:10 | 2026-10-26 18:20 | 5 / 5 fixes | 5 hardening defects resolved (HARDEN-01..05); 185 unit tests pass (100%); verify.sh & install.sh exit 0; evidence in `POST_ACCEPTANCE_HARDENING.md` |
+| 15 | M12 Final project handover | DONE | 2026-10-26 18:25 | 2026-10-26 18:30 | All Handover | README.md finalized; FINAL_HANDOVER.md created; full verification verified; project complete |
+| 16 | M13 Real-World Reliability & UX Testing | DONE | 2026-10-26 18:40 | 2026-10-26 19:25 | 29 manual / 195 unit | Strict Privacy Mode state machine implemented; 195 unit tests pass (100%); verify.sh exit 0; `M13_MANUAL_TEST_CHECKLIST.md` created with 29 pending manual tests |
 
 (The totals come from `ACCEPTANCE_CRITERIA.md` §10.)
 

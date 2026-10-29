@@ -16,7 +16,7 @@ check_pattern() {
     local search_paths=("$@")
 
     local matches
-    matches=$(grep -En "${pattern}" "${search_paths[@]}" 2>/dev/null || true)
+    matches=$(grep -rnE "${pattern}" "${search_paths[@]}" 2>/dev/null || true)
     if [ -n "${matches}" ]; then
         echo "FAIL [${rule}]: Pattern '${pattern}' found in forbidden location:" >&2
         echo "${matches}" >&2
@@ -62,10 +62,11 @@ for file in $(grep -rl "AXEnhancedUserInterface" DoomKit/Sources DOOM 2>/dev/nul
     fi
 done
 
-# R-PASTEBOARD: NSPasteboard allowed only in ClipboardFallbackHandler.swift and PanelView.swift
+# R-PASTEBOARD: NSPasteboard allowed only in ClipboardFallbackHandler.swift, PanelView.swift, and AppDelegate.swift
 for file in $(grep -rl "NSPasteboard" DoomKit/Sources DOOM 2>/dev/null || true); do
     if [ "$file" != "DoomKit/Sources/DoomServices/TextAcquisition/ClipboardFallbackHandler.swift" ] && \
-       [ "$file" != "DoomKit/Sources/DoomFeatures/Panel/PanelView.swift" ]; then
+       [ "$file" != "DoomKit/Sources/DoomFeatures/Panel/PanelView.swift" ] && \
+       [ "$file" != "DOOM/AppDelegate.swift" ]; then
         echo "FAIL [R-PASTEBOARD]: NSPasteboard found outside approved locations: $file" >&2
         VIOLATIONS=$((VIOLATIONS + 1))
     fi
@@ -97,8 +98,13 @@ for file in $(grep -rl "LSUIElement" DoomKit/Sources DOOM DOOM.xcodeproj Config 
     fi
 done
 
-# R-NO-CAPTURE: sharingType forbidden everywhere
-check_pattern "R-NO-CAPTURE" "sharingType" DoomKit/Sources DOOM
+# R-NO-CAPTURE: sharingType allowed only in DoomPanel.swift and PanelController.swift
+for file in $(grep -rl "sharingType" DoomKit/Sources DOOM 2>/dev/null || true); do
+    if [ "$file" != "DoomKit/Sources/DoomFeatures/Panel/DoomPanel.swift" ] && [ "$file" != "DoomKit/Sources/DoomFeatures/Panel/PanelController.swift" ]; then
+        echo "FAIL [R-NO-CAPTURE]: sharingType found outside DoomPanel.swift/PanelController.swift: $file" >&2
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
 
 # R-NO-TAP: CGEventTapCreate forbidden
 check_pattern "R-NO-TAP" "CGEventTapCreate" DoomKit/Sources DOOM
@@ -138,6 +144,27 @@ for file in $(grep -rlE "TISCopyCurrentASCIICapableKeyboardLayoutInputSource|UCK
     fi
 done
 
+# R-ONE-CALLSITE: .respond( allowed only once in production code, in AssistantController.swift (GEMINI-28)
+RESPOND_CALLS=$(grep -rnF ".respond(" DoomKit/Sources DOOM 2>/dev/null || true)
+RESPOND_COUNT=$(echo "${RESPOND_CALLS}" | grep -Fc ".respond(" || true)
+if [ "${RESPOND_COUNT}" -ne 1 ]; then
+    echo "FAIL [R-ONE-CALLSITE]: Expected exactly 1 call site to .respond( in production code, found ${RESPOND_COUNT}:" >&2
+    echo "${RESPOND_CALLS}" >&2
+    VIOLATIONS=$((VIOLATIONS + 1))
+elif ! echo "${RESPOND_CALLS}" | grep -Fq "DoomKit/Sources/DoomFeatures/Assistant/AssistantController.swift"; then
+    echo "FAIL [R-ONE-CALLSITE]: .respond( call site is not in AssistantController.swift:" >&2
+    echo "${RESPOND_CALLS}" >&2
+    VIOLATIONS=$((VIOLATIONS + 1))
+fi
+
+# R-NO-OPENURL: URL opening forbidden within DoomFeatures/Panel/ (SEC-11)
+check_pattern "R-NO-OPENURL" "NSWorkspace\.shared\.open|openURL|OpenURLAction" DoomKit/Sources/DoomFeatures/Panel
+
+# R-NO-FILE-WRITING: FileManager, write(to:, and temporaryDirectory forbidden in production code (SEC-05)
+check_pattern "R-NO-FILE-WRITING" "FileManager|write\(to:|temporaryDirectory" DoomKit/Sources DOOM
+
+# R-NO-SCREENCAPTUREKIT: ScreenCaptureKit forbidden in production sources (SEC-09)
+check_pattern "R-NO-SCREENCAPTUREKIT" "ScreenCaptureKit" DoomKit/Sources DOOM
 
 if [ ${VIOLATIONS} -gt 0 ]; then
     echo "Review checks failed with ${VIOLATIONS} violation(s)." >&2

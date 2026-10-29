@@ -7,6 +7,9 @@ public enum TextAcquisitionError: Error, Equatable, Sendable {
     case secureField
     case emptySelection
     case unsupported(reason: String)
+    case editorSelectionUnavailable
+    case clipboardFallbackDisabled
+    case selectionRetrievalFailed
     case tooLong(count: Int, limit: Int)
     case timedOut
     case clipboardAccessDenied

@@ -87,7 +87,7 @@ struct MainWindowModelTests {
 
         let model = MainWindowModel(context: context, dependencies: dependencies)
         #expect(model.title == "DOOM")
-        #expect(model.versionText == "Version 0.1.0 (1)")
+        #expect(model.versionText == "Version 0.1.0 (Build 1, commit f8ec5da)")
         #expect(model.status == .setupNeeded)
         #expect(model.statusText == "Setup needed")
         #expect(!model.isSetupComplete)
@@ -315,4 +315,89 @@ struct MainWindowModelTests {
         #expect(calls == 1) // Only one network request dispatched!
         #expect(!model.isTestingConnection)
     }
+
+    @Test("Privacy Mode toggles and updates dependencies and model state")
+    func testPrivacyModeToggle() async {
+        let context = makeContext()
+        let permissions = FakePermissionChecker()
+        let preferences = FakePreferences()
+        var enabledInDep = false
+
+        let dependencies = MainWindowModel.Dependencies(
+            permissions: permissions,
+            preferences: preferences,
+            hasAPIKeyProvider: { true },
+            saveAPIKeyAction: { _ in .success(()) },
+            deleteAPIKeyAction: { true },
+            isPrivacyModeEnabledProvider: { enabledInDep },
+            setPrivacyModeAction: { enabled in
+                enabledInDep = enabled
+            }
+        )
+
+        let model = MainWindowModel(context: context, dependencies: dependencies)
+        #expect(!model.isPrivacyModeEnabled)
+
+        model.setPrivacyMode(true)
+        #expect(model.isPrivacyModeEnabled)
+        #expect(enabledInDep)
+
+        model.setPrivacyMode(false)
+        #expect(!model.isPrivacyModeEnabled)
+        #expect(!enabledInDep)
+
+        enabledInDep = true
+        await model.refresh()
+        #expect(model.isPrivacyModeEnabled)
+    }
+
+    @Test("Bidirectional privacy mode binding does not cause infinite recursion")
+    @MainActor
+    func testBidirectionalPrivacyModeBindingNoRecursion() {
+        let context = makeContext()
+        let permissions = FakePermissionChecker()
+        let preferences = FakePreferences()
+        var panelController: PanelController?
+
+        let dependencies = MainWindowModel.Dependencies(
+            permissions: permissions,
+            preferences: preferences,
+            hasAPIKeyProvider: { true },
+            saveAPIKeyAction: { _ in .success(()) },
+            deleteAPIKeyAction: { true },
+            isPrivacyModeEnabledProvider: { panelController?.isPrivacyModeEnabled ?? false },
+            setPrivacyModeAction: { enabled in
+                panelController?.setPrivacyMode(enabled)
+            }
+        )
+
+        let model = MainWindowModel(context: context, dependencies: dependencies)
+        let controller = PanelController()
+        panelController = controller
+
+        controller.onPrivacyModeChange = { enabled in
+            if model.isPrivacyModeEnabled != enabled {
+                model.isPrivacyModeEnabled = enabled
+            }
+        }
+
+        // Toggling from model: must not crash or loop infinitely
+        model.setPrivacyMode(true)
+        #expect(model.isPrivacyModeEnabled)
+        #expect(controller.isPrivacyModeEnabled)
+
+        model.setPrivacyMode(false)
+        #expect(!model.isPrivacyModeEnabled)
+        #expect(!controller.isPrivacyModeEnabled)
+
+        // Toggling from controller: must not crash or loop infinitely
+        controller.setPrivacyMode(true)
+        #expect(controller.isPrivacyModeEnabled)
+        #expect(model.isPrivacyModeEnabled)
+
+        controller.setPrivacyMode(false)
+        #expect(!controller.isPrivacyModeEnabled)
+        #expect(!model.isPrivacyModeEnabled)
+    }
 }
+

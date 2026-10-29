@@ -37,6 +37,7 @@ private struct AppPreferences: PreferencesStoring {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let context: AppContext
     let mainWindowModel: MainWindowModel
+    let assistantController: AssistantController
     let panelController: PanelController
     let shortcutMonitor: SystemShortcutMonitor
     let permissionChecker: SystemPermissionChecker
@@ -46,14 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let geminiClient: any AIResponding
 
     @ObservationIgnored var openWindowAction: (() -> Void)?
-    @ObservationIgnored private var currentAcquisitionTask: Task<Void, Never>?
-    @ObservationIgnored private var cooldownTask: Task<Void, Never>?
-    @ObservationIgnored private var lastAcquiredText: SelectedText?
-    @ObservationIgnored private var retryFailureCount: Int = 0
-    @ObservationIgnored private(set) var isAcquiring: Bool = false
-    @ObservationIgnored private var activeRequestID: UUID?
     @ObservationIgnored private var lastPanelToggleInstant: ContinuousClock.Instant = .now - .seconds(10)
     private let panelToggleDebounceDuration: Duration = .milliseconds(250)
+    @ObservationIgnored private var lastActivationInstant: ContinuousClock.Instant = .now - .seconds(10)
+    private let activationDebounceDuration: Duration = .milliseconds(250)
 
     @ObservationIgnored private let lifecycleLogger: Logger
     @ObservationIgnored private let configLogger: Logger
@@ -62,18 +59,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController.isVisible
     }
 
+    var isAcquiring: Bool {
+        assistantController.isAcquiring
+    }
+
     var menuStatusText: String {
-        switch panelController.state {
-        case .acquiring, .requesting:
-            return "Working…"
-        case .succeeded:
-            if !panelController.isVisible {
-                return "Response ready"
-            }
-            return mainWindowModel.statusText
-        default:
-            return mainWindowModel.statusText
-        }
+        MenuStatusFormatter.statusText(
+            phase: assistantController.phase,
+            isPanelVisible: panelController.isVisible,
+            isPrivacyModeEnabled: panelController.isPrivacyModeEnabled,
+            fallbackText: mainWindowModel.statusText
+        )
     }
 
     override init() {
@@ -102,7 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.preferences = prefs
         let perms = SystemPermissionChecker()
         self.permissionChecker = perms
-        self.textAcquirer = SystemTextAcquirer(permissions: perms)
+        let acquirer = SystemTextAcquirer(
+            permissions: perms,
+            ownBundleIdentifier: loadedContext.configuration.bundleIdentifier
+        )
+        self.textAcquirer = acquirer
 
         let monitor = SystemShortcutMonitor(permissions: perms)
         self.shortcutMonitor = monitor
@@ -115,7 +115,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let client = GeminiClient()
         self.geminiClient = client
 
-        let controller = PanelController()
+        let assistantDeps = AssistantDependencies(
+            permissions: perms,
+            credentials: keyStore,
+            textAcquirer: acquirer,
+            ai: client,
+            preferences: prefs,
+            copyToPasteboard: { text in
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            },
+            sleep: { duration in
+                try await Task.sleep(for: duration)
+            }
+        )
+        let assistant = AssistantController(dependencies: assistantDeps)
+        self.assistantController = assistant
+
+        let controller = PanelController(assistant: assistant)
         self.panelController = controller
 
         let dependencies = MainWindowModel.Dependencies(
@@ -154,48 +171,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             restartAction: {
                 NSApp.relaunch()
             },
-            testConnectionAction: { [weak keyStore, weak client] in
-                guard let keyStore = keyStore, let client = client else {
+            testConnectionAction: { [weak assistant] in
+                guard let assistant = assistant else {
                     return (false, "Service unavailable")
                 }
-                let selectedModel: ModelID
-                if let override = prefs.modelIDOverride, let valid = ModelID(validating: override) {
-                    selectedModel = valid
-                } else {
-                    selectedModel = ModelID.default
+                return await assistant.testConnection()
+            },
+            isPrivacyModeEnabledProvider: { [weak controller] in
+                controller?.isPrivacyModeEnabled ?? false
+            },
+            setPrivacyModeAction: { [weak controller] enabled in
+                controller?.setPrivacyMode(enabled)
+            },
+            setHideLocallyFallbackAction: { [weak controller] enabled in
+                controller?.setHideLocallyFallback(enabled)
+            },
+            selfTestAction: { [weak controller] in
+                guard let controller = controller else {
+                    return .unavailable(reason: "Overlay controller not available")
                 }
-                do {
-                    guard let key = try await keyStore.readAPIKey() else {
-                        return (false, "No API key found in Keychain.")
-                    }
-                    let pingText = SelectedText(
-                        value: "ping",
-                        characterCount: 4,
-                        source: SourceApplication(localizedName: "DOOM", bundleIdentifier: "com.tace.doom"),
-                        method: .accessibility
-                    )
-                    let request = GenerationRequest(
-                        text: pingText,
-                        model: selectedModel,
-                        systemInstruction: "Respond with the word pong only.",
-                        maxOutputTokens: GeminiConfiguration.maxOutputTokens,
-                        thinkingLevel: .low
-                    )
-                    let result = try await client.respond(to: request, apiKey: key)
-                    if !result.text.isEmpty {
-                        return (true, "Connection successful! Gemini answered in stateless mode.")
-                    } else {
-                        return (false, "Gemini returned an empty response.")
-                    }
-                } catch let genError as GenerationError {
-                    let pres = MessageCatalog.presentation(for: genError, modelID: selectedModel.rawValue)
-                    return (false, "\(pres.title): \(pres.message)")
-                } catch let credError as CredentialStoreError {
-                    let pres = MessageCatalog.presentation(for: credError)
-                    return (false, "\(pres.title): \(pres.message)")
-                } catch {
-                    return (false, "Unexpected error: \(error.localizedDescription)")
+                guard CGPreflightScreenCaptureAccess() else {
+                    return .unavailable(reason: "Screen Recording permission not granted (required for self-test)")
                 }
+                return await controller.runSelfTest(osVersion: ProcessInfo.processInfo.operatingSystemVersionString)
             }
         )
 
@@ -203,31 +201,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         super.init()
 
-        controller.onCancelHandler = { [weak self] in
-            self?.activeRequestID = nil
-            self?.currentAcquisitionTask?.cancel()
-            self?.cooldownTask?.cancel()
-            self?.isAcquiring = false
-        }
-        controller.onCloseHandler = { [weak self] in
-            self?.activeRequestID = nil
-            self?.currentAcquisitionTask?.cancel()
-            self?.cooldownTask?.cancel()
-            self?.lastAcquiredText = nil
-            self?.isAcquiring = false
-            self?.panelController.updateState(.empty)
-        }
-        controller.onCopyHandler = {
-            // Handled directly in PanelView per R-PASTEBOARD
-        }
-        controller.onRetryHandler = { [weak self] in
-            self?.handleRetry()
-        }
         controller.onOpenSettingsHandler = { [weak self] in
             self?.openMainWindow()
         }
         controller.onReviewPrivacyHandler = { [weak self] in
             self?.openPrivacyNotice()
+        }
+        controller.onPrivacyModeChange = { [weak self] enabled in
+            guard let self = self else { return }
+            if self.mainWindowModel.isPrivacyModeEnabled != enabled {
+                self.mainWindowModel.isPrivacyModeEnabled = enabled
+            }
         }
     }
 
@@ -326,7 +310,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch event {
         case .activate(let origin):
             lifecycleLogger.notice("Shortcut event received: activate (origin=\(origin == .chord ? "chord" : "menu", privacy: .public))")
-            handleAskSelection()
+            handleAskSelection(origin: origin)
         case .togglePanel:
             lifecycleLogger.notice("Shortcut event received: togglePanel")
             togglePanel()
@@ -340,7 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // LIFE-11: Quit during acquisition/fallback defers until restore completes
-        if isAcquiring, let task = currentAcquisitionTask {
+        if assistantController.isAcquiring, let task = assistantController.currentTask {
             lifecycleLogger.notice("Termination requested while acquisition in flight; deferring termination until finished")
             Task {
                 _ = await task.result
@@ -417,194 +401,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController.toggle()
     }
 
-    func handleAskSelection() {
-        // LIFE-06: Prerequisite order: Accessibility -> privacy -> key
-        guard permissionChecker.accessibilityState() == .granted else {
-            panelController.updateState(.failed(
-                presentation: MessageCatalog.presentation(forPrerequisite: .accessibility),
-                cooldownSeconds: nil
-            ))
-            panelController.show()
+    func handleAskSelection(origin: ActivationOrigin = .menu) {
+        let now = ContinuousClock.now
+        guard now - lastActivationInstant >= activationDebounceDuration else {
+            lifecycleLogger.notice("Ignoring duplicate activation event within debounce window")
             return
         }
-
-        guard preferences.privacyNoticeAcknowledgedVersion >= PrivacyNoticeView.noticeVersion else {
-            panelController.updateState(.failed(
-                presentation: MessageCatalog.presentation(forPrerequisite: .privacyNotice),
-                cooldownSeconds: nil
-            ))
-            panelController.show()
-            return
-        }
-
-        Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            let hasKey = (try? await self.credentialStore.hasAPIKey()) ?? false
-            guard hasKey else {
-                self.panelController.updateState(.failed(
-                    presentation: MessageCatalog.presentation(forPrerequisite: .apiKey),
-                    cooldownSeconds: nil
-                ))
-                self.panelController.show()
-                return
-            }
-
-            self.startAcquisitionAndRequest()
-        }
-    }
-
-    private func startAcquisitionAndRequest() {
-        if isAcquiring {
-            if !panelController.isVisible {
-                panelController.show()
-            }
-            return
-        }
-
-        let requestID = UUID()
-        self.activeRequestID = requestID
-        isAcquiring = true
-        retryFailureCount = 0
-        cooldownTask?.cancel()
-        panelController.updateState(.acquiring)
-        panelController.show()
-
-        currentAcquisitionTask?.cancel()
-        currentAcquisitionTask = Task { @MainActor [weak self] in
-            guard let self = self else { return }
-
-            do {
-                let selectedText = try await self.textAcquirer.acquireSelection(
-                    copyFallbackEnabled: self.preferences.copyFallbackEnabled
-                )
-                guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-                self.lastAcquiredText = selectedText
-                self.lifecycleLogger.notice("Successfully acquired selection (\(selectedText.characterCount) chars)")
-
-                await self.performGeminiRequest(for: selectedText, requestID: requestID)
-            } catch let error as TextAcquisitionError {
-                guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-                self.isAcquiring = false
-                if error != .cancelled {
-                    let frontApp = NSWorkspace.shared.frontmostApplication
-                    let presentation = MessageCatalog.presentation(for: error, appName: frontApp?.localizedName)
-                    self.panelController.updateState(.failed(presentation: presentation, cooldownSeconds: nil))
-                }
-            } catch {
-                guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-                self.isAcquiring = false
-                let presentation = MessageCatalog.presentation(for: .unsupported(reason: "unexpected"))
-                self.panelController.updateState(.failed(presentation: presentation, cooldownSeconds: nil))
-            }
-        }
-    }
-
-    private func handleRetry() {
-        guard let text = lastAcquiredText else {
-            handleAskSelection()
-            return
-        }
-        let requestID = UUID()
-        self.activeRequestID = requestID
-        cooldownTask?.cancel()
-
-        currentAcquisitionTask?.cancel()
-        currentAcquisitionTask = Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            await self.performGeminiRequest(for: text, requestID: requestID)
-        }
-    }
-
-    private func performGeminiRequest(for text: SelectedText, requestID: UUID) async {
-        isAcquiring = true
-        let appName = text.source.localizedName ?? "this app"
-        panelController.updateState(.requesting(
-            appName: appName,
-            characterCount: text.characterCount,
-            isTakingLonger: false
-        ))
-
-        let takingLongerTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(5))
-            if !Task.isCancelled, let self = self, self.activeRequestID == requestID, case .requesting(let app, let count, _) = self.panelController.state {
-                self.panelController.updateState(.requesting(appName: app, characterCount: count, isTakingLonger: true))
-            }
-        }
-
-        defer {
-            takingLongerTask.cancel()
-            if self.activeRequestID == requestID {
-                self.isAcquiring = false
-            }
-        }
-
-        let modelID: ModelID
-        if let override = self.preferences.modelIDOverride, let valid = ModelID(validating: override) {
-            modelID = valid
-        } else {
-            modelID = ModelID.default
-        }
-
-        do {
-            guard let apiKey = try await self.credentialStore.readAPIKey() else {
-                guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-                self.panelController.updateState(.failed(
-                    presentation: MessageCatalog.presentation(forPrerequisite: .apiKey),
-                    cooldownSeconds: nil
-                ))
-                return
-            }
-
-            let request = GenerationRequest.make(text: text, model: modelID)
-            let result = try await self.geminiClient.respond(to: request, apiKey: apiKey)
-
-            guard !Task.isCancelled, self.activeRequestID == requestID else {
-                self.lifecycleLogger.notice("Discarding stale or cancelled Gemini response (requestID: \(requestID))")
-                return
-            }
-
-            self.retryFailureCount = 0
-            self.panelController.updateState(.succeeded(
-                text: result.text,
-                isTruncated: result.isTruncated,
-                restoreSkipped: text.method == .clipboard
-            ))
-        } catch let error as GenerationError {
-            guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-            self.handleGenerationFailure(error, modelID: modelID.rawValue, requestID: requestID)
-        } catch let error as CredentialStoreError {
-            guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-            let presentation = MessageCatalog.presentation(for: error)
-            self.panelController.updateState(.failed(presentation: presentation, cooldownSeconds: nil))
-        } catch {
-            guard !Task.isCancelled, self.activeRequestID == requestID else { return }
-            let presentation = MessageCatalog.presentation(for: .server(status: 500))
-            self.panelController.updateState(.failed(presentation: presentation, cooldownSeconds: nil))
-        }
-    }
-
-    private func handleGenerationFailure(_ error: GenerationError, modelID: String, requestID: UUID) {
-        guard self.activeRequestID == requestID else { return }
-        retryFailureCount += 1
-        let cooldown = RetryCooldownPolicy.cooldown(for: error, failureCount: retryFailureCount)
-        let presentation = MessageCatalog.presentation(for: error, modelID: modelID)
-
-        if let cd = cooldown, cd > 0 {
-            cooldownTask?.cancel()
-            cooldownTask = Task { @MainActor [weak self] in
-                var remaining = cd
-                while remaining > 0 {
-                    guard let self = self, !Task.isCancelled, self.activeRequestID == requestID else { return }
-                    self.panelController.updateState(.failed(presentation: presentation, cooldownSeconds: remaining))
-                    try? await Task.sleep(for: .seconds(1))
-                    remaining -= 1
-                }
-                guard let self = self, !Task.isCancelled, self.activeRequestID == requestID else { return }
-                self.panelController.updateState(.failed(presentation: presentation, cooldownSeconds: 0))
-            }
-        } else {
-            panelController.updateState(.failed(presentation: presentation, cooldownSeconds: cooldown))
-        }
+        lastActivationInstant = now
+        assistantController.handleActivation(origin: origin)
     }
 
     func quit() {

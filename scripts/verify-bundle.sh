@@ -8,17 +8,23 @@ CONFIG_RAW="${1:-debug}"
 case "${CONFIG_RAW}" in
     [Dd][Ee][Bb][Uu][Gg])
         CONFIGURATION="Debug"
+        APP="build/DerivedData/Build/Products/${CONFIGURATION}/DOOM.app"
         ;;
     [Rr][Ee][Ll][Ee][Aa][Ss][Ee])
         CONFIGURATION="Release"
+        APP="build/DerivedData/Build/Products/${CONFIGURATION}/DOOM.app"
         ;;
     *)
-        echo "Unknown configuration: ${CONFIG_RAW}. Use 'debug' or 'release'." >&2
-        exit 1
+        if [ -d "${CONFIG_RAW}" ]; then
+            CONFIGURATION="Custom"
+            APP="${CONFIG_RAW}"
+        else
+            echo "Unknown configuration or path: ${CONFIG_RAW}. Use 'debug', 'release', or a path to .app bundle." >&2
+            exit 1
+        fi
         ;;
 esac
 
-APP="build/DerivedData/Build/Products/${CONFIGURATION}/DOOM.app"
 PLIST="${APP}/Contents/Info.plist"
 BINARY="${APP}/Contents/MacOS/DOOM"
 

@@ -3,19 +3,21 @@ import Foundation
 import DoomCore
 import OSLog
 
-private let logger = Logger(subsystem: "com.tace.doom", category: "selection")
+private let logger = Logger(subsystem: "doom", category: "selection")
 
 @MainActor
 public final class SystemTextAcquirer: TextAcquiring {
     public typealias FrontmostAppProvider = @Sendable () -> (pid: pid_t, bundleIdentifier: String?, localizedName: String?)?
 
     private let permissions: any PermissionChecking
+    private let ownBundleIdentifier: String?
     private let accessibilityReader: any AccessibilitySelectionReading
     private let clipboardFallback: any ClipboardFallbackHandling
     private let frontmostAppProvider: FrontmostAppProvider
 
     public init(
         permissions: any PermissionChecking,
+        ownBundleIdentifier: String? = nil,
         accessibilityReader: any AccessibilitySelectionReading = AccessibilitySelectionReader(),
         clipboardFallback: any ClipboardFallbackHandling = ClipboardFallbackHandler(),
         frontmostAppProvider: @escaping FrontmostAppProvider = {
@@ -25,6 +27,7 @@ public final class SystemTextAcquirer: TextAcquiring {
         }
     ) {
         self.permissions = permissions
+        self.ownBundleIdentifier = ownBundleIdentifier
         self.accessibilityReader = accessibilityReader
         self.clipboardFallback = clipboardFallback
         self.frontmostAppProvider = frontmostAppProvider
@@ -47,7 +50,7 @@ public final class SystemTextAcquirer: TextAcquiring {
         let appName = frontApp.localizedName
         let source = SourceApplication(localizedName: appName, bundleIdentifier: bundleID)
 
-        if let id = bundleID, id == Bundle.main.bundleIdentifier || id == "com.tace.doom" {
+        if let id = bundleID, let own = ownBundleIdentifier, id == own {
             logger.notice("Acquisition aborted: Source is DOOM own application")
             throw TextAcquisitionError.ownApplication
         }
@@ -56,25 +59,28 @@ public final class SystemTextAcquirer: TextAcquiring {
         let t0 = Date()
 
         // Step 3: Accessibility Path
-        do {
+        do throws(TextAcquisitionError) {
             let rawText = try await accessibilityReader.readSelectedText(from: pid, bundleIdentifier: bundleID)
             let selectedText = try SelectionValidator.validate(rawText, source: source, method: .accessibility)
             let elapsed = Date().timeIntervalSince(t0)
             logger.notice("Acquired selection via accessibility in \(String(format: "%.3f", elapsed))s (\(selectedText.characterCount) chars)")
             return selectedText
-        } catch let error {
+        } catch {
             switch error {
-            case .unsupported:
-                // Step 4: Clipboard Fallback (only on .unsupported when enabled)
+            case .unsupported, .editorSelectionUnavailable:
+                // Step 4: Clipboard Fallback (only on .unsupported or .editorSelectionUnavailable when enabled)
                 if copyFallbackEnabled {
-                    logger.notice("Accessibility unsupported; attempting opt-in clipboard fallback")
-                    let (rawText, _) = try await clipboardFallback.acquireViaClipboard(sourcePid: pid)
-                    let selectedText = try SelectionValidator.validate(rawText, source: source, method: .clipboard)
+                    logger.notice("Accessibility unsupported or editor selection; attempting opt-in clipboard fallback")
+                    let (rawText, restoreSkipped) = try await clipboardFallback.acquireViaClipboard(sourcePid: pid)
+                    let selectedText = try SelectionValidator.validate(rawText, source: source, method: .clipboard, restoreSkipped: restoreSkipped)
                     let elapsed = Date().timeIntervalSince(t0)
                     logger.notice("Acquired selection via clipboard fallback in \(String(format: "%.3f", elapsed))s (\(selectedText.characterCount) chars)")
                     return selectedText
                 } else {
                     logger.notice("Selection unsupported and clipboard fallback is disabled")
+                    if error == .editorSelectionUnavailable {
+                        throw TextAcquisitionError.clipboardFallbackDisabled
+                    }
                     throw error
                 }
             default:

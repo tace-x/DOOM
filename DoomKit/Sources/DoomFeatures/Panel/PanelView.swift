@@ -7,11 +7,28 @@ public enum PanelContentState: Equatable, Sendable {
     case requesting(appName: String, characterCount: Int, isTakingLonger: Bool)
     case succeeded(text: String, isTruncated: Bool, restoreSkipped: Bool)
     case failed(presentation: MessagePresentation, cooldownSeconds: Int?)
+
+    public init(from phase: AssistantController.Phase) {
+        switch phase {
+        case .idle:
+            self = .empty
+        case .acquiring:
+            self = .acquiring
+        case .requesting(let summary):
+            self = .requesting(appName: summary.appName, characterCount: summary.characterCount, isTakingLonger: summary.isTakingLonger)
+        case .succeeded(let content):
+            self = .succeeded(text: content.text, isTruncated: content.isTruncated, restoreSkipped: content.restoreSkipped)
+        case .failed(let failure):
+            self = .failed(presentation: failure.presentation, cooldownSeconds: failure.cooldownSeconds)
+        }
+    }
 }
 
 @MainActor
 public struct PanelView: View {
     public let state: PanelContentState
+    public let privacyStatusLine: String?
+    public let onChooseFallback: (() -> Void)?
     public let onClose: () -> Void
     public let onCancel: () -> Void
     public let onCopy: () -> Void
@@ -24,6 +41,8 @@ public struct PanelView: View {
 
     public init(
         state: PanelContentState,
+        privacyStatusLine: String? = nil,
+        onChooseFallback: (() -> Void)? = nil,
         onClose: @escaping () -> Void = {},
         onCancel: @escaping () -> Void = {},
         onCopy: @escaping () -> Void = {},
@@ -32,6 +51,8 @@ public struct PanelView: View {
         onReviewPrivacy: @escaping () -> Void = {}
     ) {
         self.state = state
+        self.privacyStatusLine = privacyStatusLine
+        self.onChooseFallback = onChooseFallback
         self.onClose = onClose
         self.onCancel = onCancel
         self.onCopy = onCopy
@@ -51,6 +72,29 @@ public struct PanelView: View {
                 headerView
                     .frame(height: 32)
                     .padding(.horizontal, DoomTheme.Spacing.m)
+
+                if let privacyStatusLine = privacyStatusLine {
+                    HStack(spacing: DoomTheme.Spacing.xs) {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(DoomTheme.warning)
+                            .font(.caption)
+                        Text(privacyStatusLine)
+                            .font(.caption2)
+                            .foregroundStyle(DoomTheme.textSecondary)
+                            .lineLimit(2)
+                        Spacer()
+                        if let onChooseFallback = onChooseFallback {
+                            Button("Hide Locally") {
+                                onChooseFallback()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                        }
+                    }
+                    .padding(.horizontal, DoomTheme.Spacing.m)
+                    .padding(.vertical, 4)
+                    .background(DoomTheme.surface.opacity(0.8))
+                }
 
                 // Hairline divider
                 Rectangle()

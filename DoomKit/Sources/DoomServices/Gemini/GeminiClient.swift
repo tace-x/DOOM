@@ -3,7 +3,7 @@ import DoomCore
 import OSLog
 import os
 
-private let logger = Logger(subsystem: "com.tace.doom", category: "gemini")
+private let logger = Logger(subsystem: "doom", category: "gemini")
 
 public struct RequestDiagnosticReport: Sendable, Equatable {
     public let startTimestamp: String
@@ -130,11 +130,10 @@ public final class GeminiClient: AIResponding, Sendable {
         urlRequest.httpBody = requestBody
 
         // 2. Perform Network Call
-        let metricsDelegate = GeminiTaskMetricsDelegate()
         let responseData: Data
         let httpResponse: HTTPURLResponse
         do {
-            let (data, rawResponse) = try await session.data(for: urlRequest, delegate: metricsDelegate)
+            let (data, rawResponse) = try await session.data(for: urlRequest)
             guard let http = rawResponse as? HTTPURLResponse else {
                 let elapsed = Date().timeIntervalSince(t0)
                 logger.error("Transport returned non-HTTP response after \(String(format: "%.3f", elapsed))s")
@@ -145,13 +144,25 @@ public final class GeminiClient: AIResponding, Sendable {
         } catch let urlError as URLError {
             let tEnd = Date()
             let elapsed = tEnd.timeIntervalSince(t0)
-            let stage = failureStage(from: metricsDelegate.metrics)
+            let stage: String
+            switch urlError.code {
+            case .cancelled:
+                stage = "cancelled"
+            case .timedOut:
+                stage = "timeout"
+            case .notConnectedToInternet:
+                stage = "connection/DNS"
+            case .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted, .clientCertificateRejected:
+                stage = "TLS handshake"
+            default:
+                stage = "transport"
+            }
             let mappedError: GenerationError
             let failureCategory: String
             if urlError.code == .cancelled {
                 mappedError = .cancelled
                 failureCategory = "cancellation"
-                logger.notice("Gemini request cancelled in flight: stage=\(stage, privacy: .public), elapsed=\(String(format: "%.3f", elapsed))s")
+                logger.notice("Gemini request cancelled in flight: elapsed=\(String(format: "%.3f", elapsed))s")
             } else if urlError.code == .timedOut {
                 mappedError = .timedOut
                 failureCategory = "timeout"
@@ -352,6 +363,15 @@ public final class GeminiClient: AIResponding, Sendable {
         if let array = try? JSONDecoder().decode([InteractionErrorWrapper].self, from: data), let first = array.first, let err = first.error {
             return (err.codeString, sanitizeErrorMessage(err.message), true)
         }
+        // Fallback for proxy or gateway responses formatting error or message as a string
+        if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let str = dict["error"] as? String {
+                return (nil, sanitizeErrorMessage(str), true)
+            }
+            if let msg = dict["message"] as? String {
+                return (nil, sanitizeErrorMessage(msg), true)
+            }
+        }
         return (nil, nil, false)
     }
 
@@ -401,9 +421,17 @@ public final class GeminiClient: AIResponding, Sendable {
             if code == "quota_exceeded" || code == "RESOURCE_EXHAUSTED" || message?.localizedCaseInsensitiveContains("quota") == true {
                 return .quotaExceeded
             }
-            // Parse Retry-After header if present
+            // Parse Retry-After header if present (case-insensitive for HTTP/2 headers)
             var retryDuration: Duration? = nil
-            if let retryHeader = headers["Retry-After"] as? String, let seconds = Int(retryHeader) {
+            let retryHeaderValue: String? = {
+                for (k, v) in headers {
+                    if let keyStr = k as? String, keyStr.caseInsensitiveCompare("Retry-After") == .orderedSame {
+                        return v as? String
+                    }
+                }
+                return nil
+            }()
+            if let retryHeader = retryHeaderValue, let seconds = Int(retryHeader.trimmingCharacters(in: .whitespaces)) {
                 let clamped = max(1, min(60, seconds))
                 retryDuration = .seconds(clamped)
             } else {
@@ -535,30 +563,4 @@ private struct InteractionWireErrorPayload: Decodable {
         }
         return code?.stringValue
     }
-}
-
-// MARK: - Safe Diagnostics Helpers
-
-private final class GeminiTaskMetricsDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    var metrics: URLSessionTaskMetrics?
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
-        self.metrics = metrics
-    }
-}
-
-private func failureStage(from metrics: URLSessionTaskMetrics?) -> String {
-    guard let last = metrics?.transactionMetrics.last else {
-        return "pre-transport"
-    }
-    if last.connectEndDate == nil {
-        return "connection/DNS"
-    }
-    if last.secureConnectionEndDate == nil {
-        return "TLS handshake"
-    }
-    if last.responseStartDate == nil {
-        return "server response wait"
-    }
-    return "response transfer"
 }

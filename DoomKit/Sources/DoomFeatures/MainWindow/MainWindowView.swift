@@ -437,8 +437,117 @@ public struct MainWindowView: View {
                     }
                 }
                 .toggleStyle(.switch)
+
+                Divider().background(DoomTheme.steel.opacity(0.4))
+
+                Toggle(isOn: Binding(
+                    get: { model.privacyState.requested },
+                    set: { model.setPrivacyMode($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Privacy Mode")
+                            .font(.body)
+                            .foregroundStyle(DoomTheme.textPrimary)
+
+                        Text("Excludes DOOM's response overlay from window and display capture where supported by macOS. The overlay remains visible and usable locally.")
+                            .font(.footnote)
+                            .foregroundStyle(DoomTheme.textTertiary)
+                            .lineSpacing(2)
+                    }
+                }
+                .toggleStyle(.switch)
+
+                if model.privacyState.requested {
+                    privacyDetailsView
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private var privacyDetailsView: some View {
+        VStack(alignment: .leading, spacing: DoomTheme.Spacing.s) {
+            Text("Sharing Method")
+                .font(.subheadline.bold())
+                .foregroundStyle(DoomTheme.textSecondary)
+
+            Picker("How are you sharing?", selection: Binding(
+                get: { model.privacyState.sharingContext },
+                set: { model.setSharingContext($0) }
+            )) {
+                ForEach(SharingContext.allCases) { context in
+                    Text(context.rawValue).tag(context)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            HStack(alignment: .top, spacing: DoomTheme.Spacing.s) {
+                Image(systemName: model.privacyState.isVerifiedProtected ? "checkmark.shield.fill" : "info.circle.fill")
+                    .foregroundStyle(model.privacyState.isVerifiedProtected ? DoomTheme.accent : DoomTheme.warning)
+                    .font(.body)
+
+                Text(model.privacyState.statusDescription)
+                    .font(.footnote)
+                    .foregroundStyle(DoomTheme.textSecondary)
+                    .lineSpacing(2)
+            }
+            .padding(DoomTheme.Spacing.s)
+            .background(DoomTheme.surface.opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: DoomTheme.controlRadius))
+
+            HStack {
+                Button(action: {
+                    Task {
+                        await model.runSelfTest()
+                    }
+                }) {
+                    if model.isSelfTesting {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("Test Local Exclusion")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isSelfTesting)
+
+                Text("Verifies overlay window exclusion property. Does not verify third-party WebRTC capture paths.")
+                    .font(.caption)
+                    .foregroundStyle(DoomTheme.textTertiary)
+            }
+
+            Toggle(isOn: Binding(
+                get: { model.privacyState.hideLocallyFallbackEnabled },
+                set: { model.setHideLocallyFallback($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hide overlay locally while sharing")
+                        .font(.subheadline)
+                        .foregroundStyle(DoomTheme.textPrimary)
+
+                    Text("Explicit opt-in. Keeps the overlay hidden off-screen during active sharing and suppresses auto-showing upon query completion. Responses are preserved in memory. Press ⌃⇧H to deliberately reveal the response when safe.")
+                        .font(.caption)
+                        .foregroundStyle(DoomTheme.textTertiary)
+                }
+            }
+            .toggleStyle(.switch)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Recommended Alternatives:")
+                    .font(.caption.bold())
+                    .foregroundStyle(DoomTheme.textSecondary)
+
+                Text("• Share a single window: Share only the target application window in Google Meet instead of the entire screen. macOS isolates the shared window at the compositor level, keeping DOOM excluded.")
+                    .font(.caption)
+                    .foregroundStyle(DoomTheme.textTertiary)
+
+                Text("• Separate display: Move DOOM to an external or secondary display that is not being shared.")
+                    .font(.caption)
+                    .foregroundStyle(DoomTheme.textTertiary)
+            }
+            .padding(.top, 2)
+        }
+        .padding(.top, DoomTheme.Spacing.xs)
     }
 
     // MARK: - About Section

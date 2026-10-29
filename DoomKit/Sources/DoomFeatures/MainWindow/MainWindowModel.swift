@@ -20,6 +20,10 @@ public final class MainWindowModel {
         public let shortcutStatusProvider: @MainActor () -> ShortcutStatus
         public let restartAction: @MainActor () -> Void
         public let testConnectionAction: @Sendable () async -> (success: Bool, message: String)
+        public let isPrivacyModeEnabledProvider: @MainActor () -> Bool
+        public let setPrivacyModeAction: @MainActor (Bool) -> Void
+        public let setHideLocallyFallbackAction: @MainActor (Bool) -> Void
+        public let selfTestAction: @MainActor () async -> VerificationStatus
 
         public init(
             permissions: any PermissionChecking,
@@ -36,7 +40,11 @@ public final class MainWindowModel {
             restartAction: @escaping @MainActor () -> Void = {},
             testConnectionAction: @escaping @Sendable () async -> (success: Bool, message: String) = {
                 (false, "Not configured")
-            }
+            },
+            isPrivacyModeEnabledProvider: @escaping @MainActor () -> Bool = { false },
+            setPrivacyModeAction: @escaping @MainActor (Bool) -> Void = { _ in },
+            setHideLocallyFallbackAction: @escaping @MainActor (Bool) -> Void = { _ in },
+            selfTestAction: @escaping @MainActor () async -> VerificationStatus = { .notVerified }
         ) {
             self.permissions = permissions
             self.preferences = preferences
@@ -46,6 +54,10 @@ public final class MainWindowModel {
             self.shortcutStatusProvider = shortcutStatusProvider
             self.restartAction = restartAction
             self.testConnectionAction = testConnectionAction
+            self.isPrivacyModeEnabledProvider = isPrivacyModeEnabledProvider
+            self.setPrivacyModeAction = setPrivacyModeAction
+            self.setHideLocallyFallbackAction = setHideLocallyFallbackAction
+            self.selfTestAction = selfTestAction
         }
     }
 
@@ -72,8 +84,14 @@ public final class MainWindowModel {
     public private(set) var modelError: String?
 
     public var copyFallbackEnabled: Bool = false
+    public var privacyState: PrivacyProtectionState = PrivacyProtectionState()
+    public var isPrivacyModeEnabled: Bool {
+        get { privacyState.requested }
+        set { setPrivacyMode(newValue) }
+    }
     public var isPrivacySheetPresented: Bool = false
     public var isRemoveKeyAlertPresented: Bool = false
+    public private(set) var isSelfTesting: Bool = false
 
     public private(set) var shortcutStatus: ShortcutStatus
 
@@ -84,10 +102,18 @@ public final class MainWindowModel {
         self.context = context
         self.dependencies = dependencies
         self.title = context.configuration.displayName
-        self.versionText = "Version \(context.configuration.version) (\(context.configuration.build))"
+        self.versionText = "Version \(context.configuration.version) (Build \(context.configuration.build), commit f8ec5da)"
         self.phaseNote = "DOOM is an independent project and is not affiliated with or endorsed by Marvel, id Software, or Google."
 
         self.copyFallbackEnabled = dependencies.preferences.copyFallbackEnabled
+        let initialPrivacy = dependencies.isPrivacyModeEnabledProvider()
+        self.privacyState = PrivacyProtectionState(
+            requested: initialPrivacy,
+            windowExclusionApplied: initialPrivacy,
+            sharingContext: .notSure,
+            verification: .notVerified,
+            hideLocallyFallbackEnabled: false
+        )
         self.isPrivacyReviewed = dependencies.preferences.privacyNoticeAcknowledgedVersion >= PrivacyNoticeView.noticeVersion
         if let storedModel = dependencies.preferences.modelIDOverride {
             self.modelInput = storedModel
@@ -113,6 +139,9 @@ public final class MainWindowModel {
         self.hasAPIKey = await dependencies.hasAPIKeyProvider()
         self.isPrivacyReviewed = dependencies.preferences.privacyNoticeAcknowledgedVersion >= PrivacyNoticeView.noticeVersion
         self.copyFallbackEnabled = dependencies.preferences.copyFallbackEnabled
+        let currentPrivacy = dependencies.isPrivacyModeEnabledProvider()
+        self.privacyState.requested = currentPrivacy
+        self.privacyState.windowExclusionApplied = currentPrivacy
         self.shortcutStatus = dependencies.shortcutStatusProvider()
 
         updateStatus()
@@ -212,6 +241,49 @@ public final class MainWindowModel {
     public func setCopyFallback(_ enabled: Bool) {
         dependencies.preferences.copyFallbackEnabled = enabled
         self.copyFallbackEnabled = enabled
+    }
+
+    public func setPrivacyMode(_ enabled: Bool) {
+        guard self.privacyState.requested != enabled else { return }
+        self.privacyState.requested = enabled
+        self.privacyState.windowExclusionApplied = enabled
+        dependencies.setPrivacyModeAction(enabled)
+    }
+
+    public func setSharingContext(_ context: SharingContext) {
+        self.privacyState.sharingContext = context
+    }
+
+    public func setHideLocallyFallback(_ enabled: Bool) {
+        guard self.privacyState.hideLocallyFallbackEnabled != enabled else { return }
+        self.privacyState.hideLocallyFallbackEnabled = enabled
+        dependencies.setHideLocallyFallbackAction(enabled)
+    }
+
+    public func setFallbackMode(_ mode: FallbackMode) {
+        self.privacyState.fallbackMode = mode
+        dependencies.setHideLocallyFallbackAction(mode == .localHideWhileSharing)
+    }
+
+    public func recordUserConfirmation(method: String, osBuild: String, browserVersion: String, date: String) {
+        self.privacyState.userConfirmationRecord = UserConfirmationRecord(
+            method: method,
+            osBuild: osBuild,
+            browserVersion: browserVersion,
+            date: date
+        )
+    }
+
+    public func invalidateUserConfirmation() {
+        self.privacyState.userConfirmationRecord = nil
+    }
+
+    public func runSelfTest() async {
+        guard !isSelfTesting else { return }
+        isSelfTesting = true
+        defer { isSelfTesting = false }
+        let result = await dependencies.selfTestAction()
+        self.privacyState.verification = result
     }
 
     public func setModel(_ text: String) {

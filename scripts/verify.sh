@@ -35,7 +35,9 @@ run_verified() {
     run_verified "Architecture & Review Checks" ./scripts/review-checks.sh
 
     # 4. Package unit tests (Swift Testing, warnings as errors)
-    run_verified "Package Unit Tests" swift test --package-path DoomKit -Xswiftc -warnings-as-errors
+    run_verified "Package Unit Tests (Core)" swift test --package-path DoomKit --test-product DoomCoreTests -Xswiftc -warnings-as-errors
+    run_verified "Package Unit Tests (Services)" swift test --package-path DoomKit --test-product DoomServicesTests -Xswiftc -warnings-as-errors
+    run_verified "Package Unit Tests (Features)" swift test --package-path DoomKit --test-product DoomFeaturesTests -Xswiftc -warnings-as-errors
 
     # 5. Debug build with warnings as errors
     run_verified "Debug Build" ./scripts/build.sh debug SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
@@ -55,7 +57,18 @@ run_verified() {
     # 10. Smoke test Release build
     run_verified "Smoke Test Release" ./scripts/smoke-test.sh release
 
-    # 11. Git hygiene check (.gitignore patterns)
+    # 11. Script syntax verification
+    run_verified "Script Syntax Check" bash -c '
+        for script in scripts/*.sh; do
+            bash -n "${script}"
+        done
+        echo "All scripts passed syntax validation (bash -n)."
+    '
+
+    # 12. Uninstaller dry run
+    run_verified "Uninstaller Dry Run" ./scripts/uninstall.sh --dry-run
+
+    # 13. Git hygiene check (.gitignore patterns)
     run_verified "Git Hygiene" git check-ignore -v build .build Config/Local.xcconfig DoomKit/.build DoomKit/.swiftpm
 
     echo "=================================================="

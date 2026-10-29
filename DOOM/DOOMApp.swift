@@ -18,6 +18,7 @@ struct DOOMApp: App {
             StatusMenuContent(
                 statusText: appDelegate.menuStatusText,
                 isPanelVisible: appDelegate.isPanelVisible,
+                isPrivacyModeEnabled: appDelegate.panelController.isPrivacyModeEnabled,
                 canAskSelection: false,
                 onAskSelection: { appDelegate.handleAskSelection() },
                 onTogglePanel: { appDelegate.togglePanel() },

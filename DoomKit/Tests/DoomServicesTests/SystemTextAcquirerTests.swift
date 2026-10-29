@@ -118,12 +118,55 @@ struct SystemTextAcquirerTests {
         let fallback = ScriptedClipboardFallback(result: .success(("Fallback text", false)))
         let acquirer = SystemTextAcquirer(
             permissions: perms,
+            ownBundleIdentifier: "com.tace.doom",
             accessibilityReader: reader,
             clipboardFallback: fallback,
             frontmostAppProvider: { (pid: 9999, bundleIdentifier: "com.tace.doom", localizedName: "DOOM") }
         )
 
         await #expect(throws: TextAcquisitionError.ownApplication) {
+            try await acquirer.acquireSelection(copyFallbackEnabled: true)
+        }
+        #expect(!fallback.wasCalled)
+    }
+
+    @Test("Editor selection with fallback on executes clipboard fallback successfully")
+    @MainActor
+    func testEditorSelectionWithFallbackOnExecutesClipboard() async throws {
+        let perms = FakePermissionChecker(trusted: true)
+        let reader = ScriptedAccessibilityReader(result: .failure(.editorSelectionUnavailable))
+        let fallback = ScriptedClipboardFallback(result: .success(("function kalvium() { return true; }", false)))
+        let acquirer = SystemTextAcquirer(permissions: perms, accessibilityReader: reader, clipboardFallback: fallback)
+
+        let selected = try await acquirer.acquireSelection(copyFallbackEnabled: true)
+        #expect(selected.value == "function kalvium() { return true; }")
+        #expect(selected.method == .clipboard)
+        #expect(fallback.wasCalled)
+    }
+
+    @Test("Editor selection with fallback off throws clipboardFallbackDisabled without touching clipboard")
+    @MainActor
+    func testEditorSelectionWithFallbackOffThrowsClipboardFallbackDisabled() async {
+        let perms = FakePermissionChecker(trusted: true)
+        let reader = ScriptedAccessibilityReader(result: .failure(.editorSelectionUnavailable))
+        let fallback = ScriptedClipboardFallback(result: .success(("should not be called", false)))
+        let acquirer = SystemTextAcquirer(permissions: perms, accessibilityReader: reader, clipboardFallback: fallback)
+
+        await #expect(throws: TextAcquisitionError.clipboardFallbackDisabled) {
+            try await acquirer.acquireSelection(copyFallbackEnabled: false)
+        }
+        #expect(!fallback.wasCalled)
+    }
+
+    @Test("Empty selection never triggers clipboard fallback even if enabled")
+    @MainActor
+    func testEmptySelectionNeverTriggersClipboardFallback() async {
+        let perms = FakePermissionChecker(trusted: true)
+        let reader = ScriptedAccessibilityReader(result: .failure(.emptySelection))
+        let fallback = ScriptedClipboardFallback(result: .success(("should not be called", false)))
+        let acquirer = SystemTextAcquirer(permissions: perms, accessibilityReader: reader, clipboardFallback: fallback)
+
+        await #expect(throws: TextAcquisitionError.emptySelection) {
             try await acquirer.acquireSelection(copyFallbackEnabled: true)
         }
         #expect(!fallback.wasCalled)

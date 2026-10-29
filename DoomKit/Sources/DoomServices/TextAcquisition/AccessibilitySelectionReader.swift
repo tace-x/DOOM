@@ -3,7 +3,7 @@ import ApplicationServices
 import DoomCore
 import OSLog
 
-private let logger = Logger(subsystem: "com.tace.doom", category: "selection")
+private let logger = Logger(subsystem: "doom", category: "selection")
 
 public protocol AXAttributeProviding: Sendable {
     func copyAttribute(element: AXUIElement, attribute: CFString) -> (status: AXError, value: CFTypeRef?)
@@ -40,9 +40,9 @@ public protocol AccessibilitySelectionReading: Sendable {
     func readSelectedText(from sourcePid: pid_t, bundleIdentifier: String?) async throws(TextAcquisitionError) -> String
 }
 
-public final class AccessibilitySelectionReader: AccessibilitySelectionReading, @unchecked Sendable {
+public final class AccessibilitySelectionReader: AccessibilitySelectionReading, Sendable {
     private let provider: any AXAttributeProviding
-    private let queue = DispatchQueue(label: "com.tace.doom.accessibility")
+    private let queue = DispatchQueue(label: "accessibility-selection-reader")
 
     public static let chromiumFamily: Set<String> = [
         "com.google.Chrome",
@@ -125,23 +125,120 @@ public final class AccessibilitySelectionReader: AccessibilitySelectionReading, 
             throw TextAcquisitionError.secureField
         }
 
+        // Web area ancestors (traversing up to 12 hops to cover iframes and nested frames)
+        let webAreaAncestors = try findWebAreaAncestors(element: focused)
+        let isEditor = isEditorElement(focused: focused, webAreaAncestors: webAreaAncestors, isChromium: isChromium)
+
         // Step 7: Strategy A (kAXSelectedTextAttribute)
         if let text = try strategyA(focused: focused) {
             return text
         }
 
         // Step 8: Strategy B (kAXSelectedTextRangeAttribute)
-        if let text = try strategyB(focused: focused) {
+        var hadZeroRange = false
+        if let text = try strategyB(focused: focused, hadZeroRange: &hadZeroRange) {
             return text
         }
 
         // Step 9: Strategy C (web content: AXSelectedTextMarkerRange)
-        if let text = try strategyC(focused: focused) {
+        var hadEmptyWebMarker = false
+        if let text = try strategyC(candidates: [focused] + webAreaAncestors, hadEmptyWebMarker: &hadEmptyWebMarker) {
             return text
         }
 
-        // Step 10: Exhausted without definitive empty
+        // Step 10: Decision on failure classification
+        if isEditor {
+            throw TextAcquisitionError.editorSelectionUnavailable
+        }
+
+        if hadZeroRange && webAreaAncestors.isEmpty && !isChromium {
+            throw TextAcquisitionError.emptySelection
+        }
+
+        if hadEmptyWebMarker && !isEditor {
+            throw TextAcquisitionError.emptySelection
+        }
+
+        if hadZeroRange && !isChromium {
+            throw TextAcquisitionError.emptySelection
+        }
+
         throw TextAcquisitionError.unsupported(reason: "attributesUnsupported")
+    }
+
+    private func findWebAreaAncestors(element: AXUIElement) throws(TextAcquisitionError) -> [AXUIElement] {
+        var ancestors: [AXUIElement] = []
+        var current = element
+        for _ in 0..<12 {
+            let (parentStatus, parentVal) = provider.copyAttribute(element: current, attribute: kAXParentAttribute as CFString)
+            if parentStatus == .cannotComplete {
+                throw TextAcquisitionError.timedOut
+            }
+            guard parentStatus == .success, let parent = parentVal else { break }
+            let parentEl = (parent as! AXUIElement)
+
+            let (roleStatus, roleVal) = provider.copyAttribute(element: parentEl, attribute: kAXRoleAttribute as CFString)
+            if roleStatus == .cannotComplete {
+                throw TextAcquisitionError.timedOut
+            }
+            if roleStatus == .success, let roleStr = roleVal as? String, roleStr == "AXWebArea" {
+                ancestors.append(parentEl)
+            }
+            current = parentEl
+        }
+        return ancestors
+    }
+
+    private func isEditorElement(focused: AXUIElement, webAreaAncestors: [AXUIElement], isChromium: Bool) -> Bool {
+        // 1. Role description
+        let (roleDescStatus, roleDescVal) = provider.copyAttribute(element: focused, attribute: "AXRoleDescription" as CFString)
+        if roleDescStatus == .success, let rd = roleDescVal as? String {
+            let lower = rd.lowercased()
+            if lower == "editor" || lower.contains("code editor") || lower.contains("source code") {
+                return true
+            }
+        }
+
+        // 2. Description attribute (e.g. Monaco says "The editor is not accessible at this time." or "Editor content;Press Alt+F1...")
+        let (descStatus, descVal) = provider.copyAttribute(element: focused, attribute: kAXDescriptionAttribute as CFString)
+        if descStatus == .success, let d = descVal as? String {
+            let lower = d.lowercased()
+            if lower.contains("editor") || lower.contains("alt+f1") || lower.contains("not accessible") {
+                return true
+            }
+        }
+
+        // 3. DOM Class List (e.g. Monaco inputarea, CodeMirror, Ace)
+        let (classStatus, classVal) = provider.copyAttribute(element: focused, attribute: "AXDOMClassList" as CFString)
+        if classStatus == .success, let classes = classVal as? [String] {
+            for c in classes {
+                let lower = c.lowercased()
+                if lower.contains("inputarea") || lower.contains("monaco") || lower.contains("codemirror") || lower.contains("ace_") || lower.contains("cm-content") || lower.contains("cm-editor") {
+                    return true
+                }
+            }
+        }
+
+        // 4. In web content (Chromium or with AXWebArea ancestor), an AXTextArea or AXTextField proxy without a standard form label
+        if !webAreaAncestors.isEmpty || isChromium {
+            let (roleStatus, roleVal) = provider.copyAttribute(element: focused, attribute: kAXRoleAttribute as CFString)
+            if roleStatus == .success, let r = roleVal as? String, r == "AXTextArea" || r == "AXTextField" {
+                let (titleStatus, titleVal) = provider.copyAttribute(element: focused, attribute: kAXTitleAttribute as CFString)
+                let title = (titleStatus == .success) ? (titleVal as? String) : nil
+                if title == nil || title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                    // Check if parent has role description "editor"
+                    let (parentStatus, parentVal) = provider.copyAttribute(element: focused, attribute: kAXParentAttribute as CFString)
+                    if parentStatus == .success, let parent = parentVal {
+                        let (pDescStatus, pDescVal) = provider.copyAttribute(element: parent as! AXUIElement, attribute: "AXRoleDescription" as CFString)
+                        if pDescStatus == .success, let prd = pDescVal as? String, prd.lowercased().contains("editor") {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+
+        return false
     }
 
     private func copyFocusedElement(appEl: AXUIElement) throws(TextAcquisitionError) -> AXUIElement? {
@@ -209,7 +306,7 @@ public final class AccessibilitySelectionReader: AccessibilitySelectionReading, 
 
     // MARK: - Strategy B
 
-    private func strategyB(focused: AXUIElement) throws(TextAcquisitionError) -> String? {
+    private func strategyB(focused: AXUIElement, hadZeroRange: inout Bool) throws(TextAcquisitionError) -> String? {
         let (status, val) = provider.copyAttribute(element: focused, attribute: kAXSelectedTextRangeAttribute as CFString)
         if status == .cannotComplete {
             throw TextAcquisitionError.timedOut
@@ -222,8 +319,8 @@ public final class AccessibilitySelectionReader: AccessibilitySelectionReading, 
         guard AXValueGetType(axValue) == .cfRange, AXValueGetValue(axValue, .cfRange, &range) else { return nil }
 
         if range.length == 0 {
-            // Definitive empty (caret only!) -> throw .emptySelection without fallback
-            throw TextAcquisitionError.emptySelection
+            hadZeroRange = true
+            return nil
         }
 
         // Range > 0: copyParameterized
@@ -247,30 +344,7 @@ public final class AccessibilitySelectionReader: AccessibilitySelectionReading, 
 
     // MARK: - Strategy C
 
-    private func strategyC(focused: AXUIElement) throws(TextAcquisitionError) -> String? {
-        var candidates: [AXUIElement] = [focused]
-
-        // Find nearest ancestor with role "AXWebArea" (up to 8 hops)
-        var current = focused
-        for _ in 0..<8 {
-            let (parentStatus, parentVal) = provider.copyAttribute(element: current, attribute: kAXParentAttribute as CFString)
-            if parentStatus == .cannotComplete {
-                throw TextAcquisitionError.timedOut
-            }
-            guard parentStatus == .success, let parent = parentVal else { break }
-            let parentEl = (parent as! AXUIElement)
-
-            let (roleStatus, roleVal) = provider.copyAttribute(element: parentEl, attribute: kAXRoleAttribute as CFString)
-            if roleStatus == .cannotComplete {
-                throw TextAcquisitionError.timedOut
-            }
-            if roleStatus == .success, let roleStr = roleVal as? String, roleStr == "AXWebArea" {
-                candidates.append(parentEl)
-                break
-            }
-            current = parentEl
-        }
-
+    private func strategyC(candidates: [AXUIElement], hadEmptyWebMarker: inout Bool) throws(TextAcquisitionError) -> String? {
         let markerRangeAttr = "AXSelectedTextMarkerRange" as CFString
         let stringForMarkerAttr = "AXStringForTextMarkerRange" as CFString
 
@@ -294,8 +368,7 @@ public final class AccessibilitySelectionReader: AccessibilitySelectionReading, 
                 if !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     return str
                 } else {
-                    // Marker range present but string is empty/whitespace -> definitive empty
-                    throw TextAcquisitionError.emptySelection
+                    hadEmptyWebMarker = true
                 }
             }
         }

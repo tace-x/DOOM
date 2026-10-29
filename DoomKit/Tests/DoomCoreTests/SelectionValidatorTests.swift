@@ -63,4 +63,15 @@ struct SelectionValidatorTests {
         #expect(result.characterCount == 5)
         #expect(result.value == "🇺🇸 👨🏽‍💻 é")
     }
+
+    @Test("HARDEN-01: restoreSkipped flag is preserved by SelectionValidator")
+    func testRestoreSkippedPreservation() throws {
+        let textDefault = try SelectionValidator.validate("Test text", source: source, method: .clipboard)
+        #expect(textDefault.restoreSkipped == false)
+
+        let textSkipped = try SelectionValidator.validate("Test text", source: source, method: .clipboard, restoreSkipped: true)
+        #expect(textSkipped.restoreSkipped == true)
+        #expect(textSkipped.method == .clipboard)
+    }
 }
+

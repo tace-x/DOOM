@@ -152,4 +152,84 @@ struct AccessibilitySelectionReaderTests {
             try await reader.readSelectedText(from: 1234, bundleIdentifier: "com.example.app")
         }
     }
+
+    @Test("Embedded editor proxy with range 0 throws editorSelectionUnavailable")
+    func testEditorElementThrowsEditorSelectionUnavailable() async {
+        let provider = ScriptedAXAttributeProvider()
+        let fakeElement = AXUIElementCreateApplication(1234)
+
+        provider.attributeResponses[kAXFocusedUIElementAttribute as String] = (.success, fakeElement)
+        provider.attributeResponses[kAXRoleAttribute as String] = (.success, "AXTextArea" as CFString)
+        provider.attributeResponses["AXRoleDescription"] = (.success, "editor" as CFString)
+        provider.attributeResponses[kAXSelectedTextAttribute as String] = (.noValue, nil)
+
+        var zeroRange = CFRange(location: 0, length: 0)
+        let axValue = AXValueCreate(.cfRange, &zeroRange)!
+        provider.attributeResponses[kAXSelectedTextRangeAttribute as String] = (.success, axValue)
+
+        let reader = AccessibilitySelectionReader(provider: provider)
+        await #expect(throws: TextAcquisitionError.editorSelectionUnavailable) {
+            try await reader.readSelectedText(from: 1234, bundleIdentifier: "com.google.Chrome")
+        }
+    }
+
+    @Test("Monaco editor description throws editorSelectionUnavailable")
+    func testMonacoDescriptionThrowsEditorSelectionUnavailable() async {
+        let provider = ScriptedAXAttributeProvider()
+        let fakeElement = AXUIElementCreateApplication(1234)
+
+        provider.attributeResponses[kAXFocusedUIElementAttribute as String] = (.success, fakeElement)
+        provider.attributeResponses[kAXRoleAttribute as String] = (.success, "AXTextArea" as CFString)
+        provider.attributeResponses[kAXDescriptionAttribute as String] = (.success, "The editor is not accessible at this time." as CFString)
+        provider.attributeResponses[kAXSelectedTextAttribute as String] = (.noValue, nil)
+
+        var zeroRange = CFRange(location: 0, length: 0)
+        let axValue = AXValueCreate(.cfRange, &zeroRange)!
+        provider.attributeResponses[kAXSelectedTextRangeAttribute as String] = (.success, axValue)
+
+        let reader = AccessibilitySelectionReader(provider: provider)
+        await #expect(throws: TextAcquisitionError.editorSelectionUnavailable) {
+            try await reader.readSelectedText(from: 1234, bundleIdentifier: "com.google.Chrome")
+        }
+    }
+
+    @Test("DOM class list inputarea throws editorSelectionUnavailable")
+    func testDOMClassListThrowsEditorSelectionUnavailable() async {
+        let provider = ScriptedAXAttributeProvider()
+        let fakeElement = AXUIElementCreateApplication(1234)
+
+        provider.attributeResponses[kAXFocusedUIElementAttribute as String] = (.success, fakeElement)
+        provider.attributeResponses[kAXRoleAttribute as String] = (.success, "AXTextArea" as CFString)
+        provider.attributeResponses["AXDOMClassList"] = (.success, ["inputarea", "monaco-mouse-cursor-text"] as CFArray)
+        provider.attributeResponses[kAXSelectedTextAttribute as String] = (.noValue, nil)
+
+        var zeroRange = CFRange(location: 0, length: 0)
+        let axValue = AXValueCreate(.cfRange, &zeroRange)!
+        provider.attributeResponses[kAXSelectedTextRangeAttribute as String] = (.success, axValue)
+
+        let reader = AccessibilitySelectionReader(provider: provider)
+        await #expect(throws: TextAcquisitionError.editorSelectionUnavailable) {
+            try await reader.readSelectedText(from: 1234, bundleIdentifier: "com.google.Chrome")
+        }
+    }
+
+    @Test("Ordinary webpage with empty marker throws emptySelection")
+    func testOrdinaryWebPageEmptyMarkerThrowsEmptySelection() async {
+        let provider = ScriptedAXAttributeProvider()
+        let fakeElement = AXUIElementCreateApplication(1234)
+
+        provider.attributeResponses[kAXFocusedUIElementAttribute as String] = (.success, fakeElement)
+        provider.attributeResponses[kAXRoleAttribute as String] = (.success, "AXWebArea" as CFString)
+        provider.attributeResponses[kAXSelectedTextAttribute as String] = (.noValue, nil)
+        provider.attributeResponses[kAXSelectedTextRangeAttribute as String] = (.noValue, nil)
+
+        let fakeMarker = "EmptyMarker" as CFString
+        provider.attributeResponses["AXSelectedTextMarkerRange"] = (.success, fakeMarker)
+        provider.paramResponses["AXStringForTextMarkerRange"] = (.success, "" as CFString)
+
+        let reader = AccessibilitySelectionReader(provider: provider)
+        await #expect(throws: TextAcquisitionError.emptySelection) {
+            try await reader.readSelectedText(from: 1234, bundleIdentifier: "com.google.Chrome")
+        }
+    }
 }

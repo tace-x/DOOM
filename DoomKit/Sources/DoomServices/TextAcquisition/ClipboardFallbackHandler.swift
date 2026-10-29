@@ -3,7 +3,7 @@ import Foundation
 import DoomCore
 import OSLog
 
-private let logger = Logger(subsystem: "com.tace.doom", category: "selection")
+private let logger = Logger(subsystem: "doom", category: "selection")
 
 public protocol PasteboardItemDataProviding: Sendable {
     var types: [NSPasteboard.PasteboardType] { get }

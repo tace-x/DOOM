@@ -3,6 +3,7 @@ import SwiftUI
 public struct StatusMenuContent: View {
     public let statusText: String
     public let isPanelVisible: Bool
+    public let isPrivacyModeEnabled: Bool
     public let canAskSelection: Bool
     public let onAskSelection: () -> Void
     public let onTogglePanel: () -> Void
@@ -12,6 +13,7 @@ public struct StatusMenuContent: View {
     public init(
         statusText: String,
         isPanelVisible: Bool,
+        isPrivacyModeEnabled: Bool = false,
         canAskSelection: Bool = false,
         onAskSelection: @escaping () -> Void = {},
         onTogglePanel: @escaping () -> Void = {},
@@ -20,6 +22,7 @@ public struct StatusMenuContent: View {
     ) {
         self.statusText = statusText
         self.isPanelVisible = isPanelVisible
+        self.isPrivacyModeEnabled = isPrivacyModeEnabled
         self.canAskSelection = canAskSelection
         self.onAskSelection = onAskSelection
         self.onTogglePanel = onTogglePanel

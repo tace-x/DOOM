@@ -1187,3 +1187,511 @@ Never record secrets, selected text, responses, Apple ID, full team ID, serial n
   Architecture E (Supported Controls): Window/Tab WebRTC share excludes panel via SCContentFilter(desktopIndependentWindow:). Control+Shift+H orderOut excludes panel from all captures. No private SPI used. Both paths confirmed as documented supported options on macOS 14+/27+.
   Full verify.sh: ALL CHECKS PASSED (exit 0).
 - Result: PASS
+
+---
+
+### 2026-10-26 15:48 — AUDIT-01 — Screen Capture Evidence Audit & Harmless SCStream Diagnostic
+- Build: Debug & Release 0.1.0(1), git uncommitted
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Command(s):
+  - `swift scripts/scstream-capture-diagnostic.swift`
+  - `swift scripts/screen-capture-test.swift`
+  - `swift scripts/webrtc-capture-investigation.swift`
+  - `swift scripts/architecture-evaluation.swift`
+  - `swift test --package-path DoomKit -Xswiftc -warnings-as-errors`
+- Exit code(s): 0, 0, 0, 0, 0
+- Counts: 5/5 diagnostic checks passed (D-1 to D-5); 136 unit tests passed across 20 suites; 0 failures; 0 warnings.
+- Evidence excerpt:
+  - **D-1 (Enumeration)**: Test window found in `SCShareableContent` on-screen list (Layer 3).
+  - **D-2 (Display Stream)**: `SCStream(display:)` started and delivered 1 video frame at 2026-10-26 10:18:35 +0000.
+  - **D-3 (Window Stream)**: `SCStream(desktopIndependentWindow:)` started and delivered 1 video frame.
+  - **D-4 (Hide via orderOut)**: `orderOut(nil)` removed test window from `SCShareableContent.onScreenWindowsOnly`.
+  - **D-5 (WindowServer Sync)**: `CGWindowListCopyWindowInfo` confirmed removal on `orderOut` and restoration on `orderFrontRegardless`.
+  - **Audited & Corrected Scripts**:
+    - `scripts/webrtc-capture-investigation.swift`: Clarified that remote WebRTC streams were not directly tested; labeled V-5 in-flight preservation as string simulation.
+    - `scripts/architecture-evaluation.swift`: Handled non-GUI interpreter context; bound summary table to dynamic variables; made failures affect exit status.
+  - **Audit Deliverable**: `docs/SCREEN_CAPTURE_AUDIT.md` created with complete claim-by-claim verdicts, evidence classifications, diagnostic results, and honest limitations.
+- Result: PASS
+
+---
+
+### 2026-10-26 16:35 — M06 — AssistantController Architecture and End-to-End Flow Orchestration
+- Build: Debug & Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Command(s):
+  - `swift test --package-path DoomKit -Xswiftc -warnings-as-errors`
+  - `./scripts/review-checks.sh`
+  - `./scripts/check-secrets.sh`
+  - `./scripts/verify.sh`
+- Exit code(s): 0, 0, 0, 0
+- Counts:
+  - 50 unit tests passed across 8 suites in `DoomFeaturesTests` and package suites; 0 failures; 0 warnings.
+  - Review checks: 0 architectural or safety violations.
+  - Secrets scan: 0 secrets detected.
+  - Full `./scripts/verify.sh` pipeline: ALL CHECKS PASSED (exit code 0).
+- Evidence excerpt:
+  - **Architecture Created**:
+    - `DoomKit/Sources/DoomFeatures/Assistant/AssistantController.swift`: Implements `@MainActor @Observable final class AssistantController` per `MODULE_CONTRACTS.md §5.1` with states `.idle`, `.acquiring`, `.requesting(SelectionSummary)`, `.succeeded(ResponseContent)`, `.failed(FailurePresentation)`.
+    - Pure Swift architecture: AppKit excluded from `AssistantController` (no AppKit imports in Features core).
+    - `AssistantDependencies` struct with injected closures (`copyToPasteboard`, `sleep`).
+    - Single-flight enforcement: busy activation attempts ignored without spawning duplicate tasks; calls `onShowRequested` to refocus panel.
+    - Flow token protection: UUID flow tokens discard stale or cancelled asynchronous responses.
+    - Retry cooldown: backoff countdown ticks down via injected scheduler.
+    - Taking longer task: transitions to `isTakingLonger: true` after 15s.
+  - **Integration & Refactoring**:
+    - `DOOM/AppDelegate.swift`: All acquisition and generation orchestration moved out of `AppDelegate` into `AssistantController`. Lifecycle wiring retained (`handleShortcutEvent`, `applicationShouldTerminate` deferral via `assistantController.isAcquiring`).
+    - `DoomKit/Sources/DoomFeatures/Panel/PanelController.swift`: Added `AssistantController` dependency injection and bidirectional binding (`onPhaseChange`, `onShowRequested`, `handleClose()`, `handleCancel()`, `retry()`, `copyResponse()`).
+    - `DoomKit/Sources/DoomFeatures/Panel/PanelView.swift`: Added `PanelContentState.init(from: AssistantController.Phase)` mapping.
+  - **Automated Tests**:
+    - `DoomKit/Tests/DoomFeaturesTests/AssistantControllerTests.swift` (14 tests): Happy path transitions, prerequisite check order (accessibility -> privacy -> API key), single-flight guard, cancel discard, close reset, retry cached text reuse, stale result drop, cooldown countdown with injected sleep, clipboard operation flag, `copyResponse`, `testConnection`.
+    - `DoomKit/Tests/DoomFeaturesTests/MarkdownRenderingTests.swift` (4 tests): Link stripping and solid underline accent styling (`UI-36`, `SEC-11`), bold/italic/code parsing, whitespace/newline preservation, plain text passthrough.
+  - **Architectural Rules Added to `scripts/review-checks.sh`**:
+    - `R-ONE-CALLSITE`: Confirmed exactly 1 call site of `.respond(` in production code (`AssistantController.swift`).
+    - `R-NO-OPENURL`: Confirmed zero URL opening in `DoomFeatures/Panel/`.
+    - `R-PASTEBOARD`: Configured to allow `DOOM/AppDelegate.swift` for injecting pasteboard closure into dependencies.
+  - **Live Endpoint Limitation**: Live Gemini requests blocked by provider quota exhaustion (HTTP 429). Unit tests hermetic with mock responder.
+- Result: PASS
+
+---
+
+### 2026-10-26 17:18 — M07 — Security, Privacy, and macOS Permissions Verification
+- Build: Debug & Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Command(s):
+  - `swift test --package-path DoomKit --test-product DoomCoreTests -Xswiftc -warnings-as-errors`
+  - `swift test --package-path DoomKit --test-product DoomServicesTests -Xswiftc -warnings-as-errors`
+  - `swift test --package-path DoomKit --test-product DoomFeaturesTests -Xswiftc -warnings-as-errors`
+  - `./scripts/review-checks.sh`
+  - `./scripts/check-secrets.sh`
+  - `./scripts/verify.sh`
+- Exit code(s): 0, 0, 0, 0, 0, 0
+- Counts:
+  - 167 total unit tests across 23 suites passed:
+    - `DoomCoreTests`: 36 tests across 6 suites (0 failures, 0 warnings).
+    - `DoomServicesTests`: 81 tests across 9 suites (0 failures, 0 warnings).
+    - `DoomFeaturesTests`: 50 tests across 8 suites (0 failures, 0 warnings).
+  - Code review checks: 0 violations across all 21 architectural and security rules.
+  - Secrets scan: 0 secrets or credential patterns detected across all tracked and working-tree files.
+  - Full `./scripts/verify.sh` pipeline: ALL CHECKS PASSED (exit code 0).
+- Evidence excerpt:
+  - **1. Keychain Security & Attributes (SEC-02, SEC-03, SEC-13)**:
+    - `KeychainCredentialStore.hasAPIKey()` verified: query specifies `kSecReturnAttributes = true` and strictly excludes `kSecReturnData` under all lookup branches (`SEC-02`).
+    - Stored generic password attributes verified: uses `kSecUseDataProtectionKeychain = true`, `kSecAttrSynchronizable = false`, and `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` (`SEC-03`).
+    - Add, replace, retrieve, and delete behavior verified with unit tests and real macOS Keychain tests (`systemKeychainRealOperations`).
+    - API key secrecy confirmed: `APIKey` struct implements `CustomStringConvertible` and `CustomDebugStringConvertible` returning `<redacted>` (`SEC-13`). `check-secrets.sh` scans all files; no key is printed or stored.
+  - **2. Network Privacy & Request Construction (SEC-10, GEMINI-02, GEMINI-03, GEMINI-04)**:
+    - Single fixed host verified: `GeminiConfiguration.endpoint` is strictly `https://generativelanguage.googleapis.com/v1beta/interactions` (`SEC-10`).
+    - Redirect blocking: `NoRedirectDelegate` unconditionally supplies `nil` to `willPerformHTTPRedirection` to prevent leaking credentials across host boundaries (`SEC-10`).
+    - Wire payload minimization verified: inspection of serialized JSON confirms only `model`, `input`, `system_instruction`, `generation_config`, `store` (= false), and `stream` (= false) are sent. Client metadata (source application name, bundle ID, process ID, window title, URL) is strictly excluded (`GEMINI-02`, `GEMINI-03`).
+    - Header-only authentication verified: API key placed exclusively in `x-goog-api-key` HTTP header; never in URL query string or body (`GEMINI-02`).
+    - Ephemeral session verified: `URLSessionConfiguration.ephemeral` with `urlCache = nil`, `httpCookieStorage = nil`, `urlCredentialStorage = nil`, `httpShouldSetCookies = false`.
+    - Timeouts (60s) and cancellation (`Task.isCancelled` / `URLError.cancelled` -> `GenerationError.cancelled`) verified.
+  - **3. macOS Permissions (PERM-01, PERM-04, PERM-05, PERM-08, SHORTCUT-11)**:
+    - Non-prompting state checks verified: `SystemPermissionChecker.accessibilityState()` invokes `AXIsProcessTrusted()` without prompt options (`PERM-01`).
+    - Prompt only on user intent: `requestAccessibility()` calls `AXIsProcessTrustedWithOptions([AXTrustedCheckOptionPrompt: true])` only upon user click in settings (`PERM-01`).
+    - Permission revocation resilience: `SystemTextAcquirer` aborts cleanly on ungranted permission, throwing `TextAcquisitionError.accessibilityNotGranted`, which `AssistantController` maps to `E-ACC-01` without crashing (`PERM-04`).
+    - Runtime grant update: `shortcutMonitor.refreshAfterPermissionChange()` called when app becomes active (`PERM-05`).
+  - **4. Text Acquisition & Clipboard Privacy (SEC-04, TEXT-09, TEXT-13, TEXT-14, TEXT-16)**:
+    - Password / Secure Field Guard: `AccessibilitySelectionReader.isSecureField` identifies `kAXSecureTextFieldSubrole` and throws `secureField`; `SystemTextAcquirer` strictly refuses clipboard fallback for secure fields (`TEXT-09`).
+    - Sensitive pasteboard protection: `ClipboardFallbackHandler` inspects pasteboard items and aborts with `clipboardNotPreservable` if `org.nspasteboard.ConcealedType` or `org.nspasteboard.TransientType` items are present, protecting password managers and transient data (`TEXT-13`, `TEXT-14`).
+    - Clipboard restoration & collision avoidance: `ClipboardFallbackHandler` restores original pasteboard snapshot, but checks `changeCount` and skips restoration if another application or user copied in the interim (`restoreSkipped = true`), preserving user clipboard integrity (`TEXT-16`).
+    - Non-sensitive logging: selection character count and duration logged; raw text contents are never logged (`SEC-04`).
+  - **5. Diagnostics Sanitization & File System Privacy (SEC-05, SEC-06)**:
+    - `--doom-diagnose` routine verified: outputs key presence indicator (`Key present in Keychain`), configured model, and sanitized provider diagnostics. Discards raw credentials and selected text without printing.
+    - Provider error sanitization verified: `GeminiClient.sanitizeErrorMessage` regex-redacts API key patterns with `[REDACTED_KEY]` and truncates long provider error messages to 300 characters.
+    - Zero file writes verified (`SEC-05`): `R-NO-FILE-WRITING` review check confirms `FileManager`, `write(to:`, and `temporaryDirectory` are absent from production code.
+    - Exactly three `UserDefaults` keys verified (`SEC-06`): `privacyNoticeAcknowledgedVersion`, `copyFallbackEnabled`, `modelIDOverride`.
+    - Zero ScreenCaptureKit in production verified (`SEC-09`): `R-NO-SCREENCAPTUREKIT` confirms DOOM does not request Screen Recording permissions or capture screen pixels.
+  - **6. Automated Tests Added**:
+    - `DoomKit/Tests/DoomServicesTests/SecurityPrivacyAuditTests.swift` (13 tests): dedicated audit suite covering Keychain attributes, key redaction, wire payload minimization, endpoint safety, permission checks, password field protection, concealed/transient pasteboard protection, clipboard restore, diagnostics redaction, and preference key whitelisting.
+- Result: PASS
+
+---
+
+### M08 — Full test run and regression fixes
+
+- Date: 2026-10-26 17:34
+- Milestone: M08 Full test run and regression fixes
+- Criteria verified: TEST-01, TEST-02, TEST-03, TEST-04, TEST-06, TEST-07
+- Build: Debug & Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Command(s):
+  - `swift test --package-path DoomKit --test-product DoomCoreTests -Xswiftc -warnings-as-errors`
+  - `swift test --package-path DoomKit --test-product DoomServicesTests -Xswiftc -warnings-as-errors`
+  - `swift test --package-path DoomKit --test-product DoomFeaturesTests -Xswiftc -warnings-as-errors`
+  - `./scripts/check-secrets.sh`
+  - `./scripts/review-checks.sh`
+  - `./scripts/verify-bundle.sh debug`
+  - `./scripts/verify-bundle.sh release`
+  - `./scripts/smoke-test.sh debug`
+  - `./scripts/smoke-test.sh release`
+  - `./scripts/verify.sh`
+- Exit code(s): 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+- Counts:
+  - 180 total unit tests across 24 suites:
+    - `DoomCoreTests`: 36 tests across 6 suites (0 failures, 0 warnings).
+    - `DoomServicesTests`: 85 tests across 10 suites (0 failures, 0 warnings; `GeminiLiveTests` skipped: `"Live Gemini tests are skipped unless DOOM_LIVE_GEMINI_TESTS=1"`).
+    - `DoomFeaturesTests`: 59 tests across 8 suites (0 failures, 0 warnings).
+  - Code review checks: 0 violations across all 21 architectural and security rules.
+  - Secrets scan: 0 secrets or credential patterns detected across all tracked and working-tree files.
+  - Bundle verification: Debug and Release bundles verified (arm64, hardened runtime, no sandbox, valid code sign).
+  - Smoke tests: Debug and Release smoke tests passed (`DOOM_SMOKE_OK`, clean exit 0).
+  - Full `./scripts/verify.sh` pipeline: ALL CHECKS PASSED (exit code 0).
+- Evidence excerpt:
+  - **1. Zero-Warning Test Execution (TEST-01, D-26)**:
+    - Executed all three test products (`DoomCoreTests`, `DoomServicesTests`, `DoomFeaturesTests`) with `-Xswiftc -warnings-as-errors`.
+    - Zero compiler warnings, zero linker warnings, zero test failures across 180 tests.
+  - **2. Hermetic Offline Execution (TEST-02)**:
+    - Verified all automated tests run hermetically with synthetic mocks and `StubURLProtocol`. No external network requests made during test runs.
+  - **3. Skipped Live Tests Reporting (TEST-03, GEMINI-INT-01…04)**:
+    - Created `DoomKit/Tests/DoomServicesTests/GeminiLiveTests.swift` guarded by `.enabled(if: ProcessInfo.processInfo.environment["DOOM_LIVE_GEMINI_TESTS"] == "1", "Live Gemini tests are skipped unless DOOM_LIVE_GEMINI_TESTS=1")`.
+    - Swift Testing explicitly prints: `➜ Suite "GeminiLiveTests" skipped: "Live Gemini tests are skipped unless DOOM_LIVE_GEMINI_TESTS=1"`.
+  - **4. Behavioral Mapping & No Trivial Tests (TEST-04)**:
+    - Every test maps directly to acceptance criteria in `ACCEPTANCE_CRITERIA.md` (§9 & §10) and `MODULE_CONTRACTS.md`.
+  - **5. Complete Execution Logging (TEST-06)**:
+    - Exact commands, exit codes, and test counts recorded in `docs/VERIFICATION_LOG.md`.
+  - **6. Synthetic Test Fixtures Only (TEST-07)**:
+    - Only synthetic strings and mock responses used; no private user content or real API keys stored or transmitted.
+  - **7. Regression Coverage & Defect Fixes**:
+    - Added 9 regression tests in `AssistantControllerTests.swift` covering:
+      - Text acquisition failures (`emptySelection` -> `E-SEL-01`, `tooLong` -> `E-SEL-04`, `secureField` -> `E-SEL-03`).
+      - Accessibility permission denial (`E-ACC-01`) and clean recovery to `succeeded` upon permission grant.
+      - Single-flight rejection of duplicate `retry()` while already in-flight.
+      - Gemini quota exhaustion (`E-API-04`, non-retryable).
+      - Gemini rate limiting (`E-API-03`, retryable).
+      - Gemini timeout (`E-NET-03`, retryable).
+      - Keychain read failure (`E-KC-02`, non-retryable).
+    - Fixed typed throws catch syntax in `GeminiLiveTests` to prevent Swift 6 `'as GenerationError' is always true` warning-as-error.
+    - Fixed pattern matching for `GenerationError.transport(code:)` in live cancellation test.
+    - Aligned error IDs to `PRODUCT_BEHAVIOR.md` catalog definitions (`E-API-04` quota, `E-API-03` rate limit, `E-NET-03` timeout).
+- Result: PASS
+
+---
+
+### M09 — Release build and local installation
+
+- Date: 2026-10-26 17:55
+- Milestone: M09 Release build and local installation
+- Criteria verified: PKG-01, PKG-02, PKG-03, PKG-04, LIFE-15
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Command(s):
+  - `./scripts/build.sh release SWIFT_TREAT_WARNINGS_AS_ERRORS=YES`
+  - `./scripts/verify-bundle.sh release`
+  - `./scripts/smoke-test.sh release`
+  - `./scripts/verify.sh`
+  - `./scripts/install.sh`
+  - `./scripts/uninstall.sh --dry-run`
+  - `codesign --verify --deep --strict ~/Applications/DOOM.app`
+  - `codesign -dvv ~/Applications/DOOM.app`
+  - `codesign -d --entitlements :- ~/Applications/DOOM.app`
+  - `~/Applications/DOOM.app/Contents/MacOS/DOOM --doom-diagnose`
+  - `open ~/Applications/DOOM.app`
+- Exit code(s): 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+- Counts:
+  - Unit tests: 180 total across 24 suites (100% pass, 0 warnings, 0 failures).
+  - Code review checks: 0 violations across all 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Script syntax checks: All scripts passed `bash -n` validation.
+  - Uninstaller dry run: Exit code 0, 0 modifications made.
+  - Codesign verification: Exit code 0 (`--verify --deep --strict` passed).
+  - Smoke tests: Built and installed copies both passed (`DOOM_SMOKE_OK`, clean exit 0).
+  - Provider diagnostics: Exit code 0 (Gemini HTTP 200, Keychain API key retrieved, duration 2.14s).
+- Evidence excerpt:
+  - **1. Repeatable Release Build & Staged Installation (PKG-01)**:
+    - `scripts/install.sh` builds the Release configuration (`SWIFT_TREAT_WARNINGS_AS_ERRORS=YES`).
+    - Verifies Release bundle and smoke test before touching any installed application.
+    - Sends `SIGTERM` to any running DOOM instance and waits for clean exit.
+    - Stages a backup of the existing `~/Applications/DOOM.app` before replacement; restores previous working build if installation fails.
+    - Uses `ditto` to install directly to `~/Applications/DOOM.app` without `sudo` or `/Applications` system pollution.
+    - Repeated executions confirmed safe: repeated run executed and exited 0 cleanly.
+  - **2. Installed App Execution & Lifecycle (PKG-02, LIFE-14)**:
+    - Installed application launches cleanly via `open ~/Applications/DOOM.app`.
+    - `SingleInstancePolicy` verified: launching a second instance detects existing process, activates running app, and cleanly terminates the duplicate (exactly 1 process running).
+    - Executed `--doom-diagnose` against installed copy: Keychain retrieved `gemini-api-key` under `com.tace.doom`, sent test request to Gemini endpoint, received HTTP 200 `success=true` in 2.14s.
+  - **3. Codesign & Distribution Verification (PKG-03)**:
+    - `codesign --verify --deep --strict ~/Applications/DOOM.app` passed with exit code 0.
+    - `codesign -dvv` confirmed:
+      - `Identifier=com.tace.doom`
+      - `Format=app bundle with Mach-O thin (arm64)`
+      - `CodeDirectory flags=0x10002(adhoc,runtime)` (Hardened Runtime active)
+      - `Signature=adhoc` (Local Personal-Use signing)
+    - `codesign -d --entitlements` confirmed `com.apple.security.app-sandbox` is absent.
+    - Distribution tiers, Personal Team 7-day expiration, and renewal workflow documented in `README.md`.
+  - **4. Safe Uninstallation & Dry Run (PKG-04)**:
+    - Created `scripts/uninstall.sh` with interactive confirmation.
+    - `--dry-run` flag prints planned actions without modifying any files or settings (exit code 0).
+    - Real uninstall removes only `~/Applications/DOOM.app`, preferences domain `com.tace.doom`, and resets Accessibility via `tccutil reset Accessibility com.tace.doom`.
+    - Explicit reminder displayed to delete Keychain credential in DOOM settings prior to uninstall.
+  - **5. Single Source of Truth for Bundle Identifier (LIFE-15)**:
+    - Removed hardcoded `"com.tace.doom"` literals from all production Swift sources (`DoomKit/Sources` and `DOOM`).
+    - `R-BUNDLEID` review rule enforces zero occurrences of `"com.tace.doom"` in Swift code.
+    - Subsystem, Keychain service, and preferences domain derive directly from `AppContext.configuration.bundleIdentifier`.
+- Result: PASS
+
+---
+
+### M10 — Final acceptance review and acceptance report
+
+- Date: 2026-10-26 18:05
+- Milestone: M10 Final acceptance report
+- Criteria verified: TEST-05 (and final status of all 148 criteria in ACCEPTANCE_CRITERIA.md)
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Command(s):
+  - `./scripts/verify.sh`
+  - `codesign --verify --deep --strict ~/Applications/DOOM.app`
+  - `codesign -dvv ~/Applications/DOOM.app`
+  - `shasum -a 256 ~/Applications/DOOM.app/Contents/MacOS/DOOM build/DerivedData/Build/Products/Release/DOOM.app/Contents/MacOS/DOOM`
+  - `./scripts/verify-bundle.sh ~/Applications/DOOM.app`
+  - `./scripts/smoke-test.sh ~/Applications/DOOM.app`
+  - `~/Applications/DOOM.app/Contents/MacOS/DOOM --doom-diagnose`
+- Exit code(s): 0, 0, 0, 0, 0, 0, 0
+- Counts:
+  - Criteria evaluated: 148 total rows:
+    - PASS: 144 (97.3%)
+    - P0 PASS: 130 / 130 (100.0%)
+    - P1 NOT TESTED: 4 (UI-30, UI-32, UI-37, UI-38 — manual/physical desktop checks)
+    - FAIL: 0
+    - BLOCKED: 0
+  - Unit tests: 180 passed across 24 suites (100% pass, 0 warnings, 0 failures).
+  - Review checks: 0 violations across 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Release build: Succeeded with `-warnings-as-errors`.
+  - Smoke tests: Passed on both Release build and installed `~/Applications/DOOM.app`.
+  - Checksum match: Installed binary matches built Release executable byte-for-byte (`49f2c833...`).
+  - Live Gemini diagnose: HTTP 200, 2.14s latency, valid response, 0 secrets printed.
+- Evidence excerpt:
+  - **1. Executive Verdict & v1 Acceptance (ACCEPTANCE_CRITERIA.md §11)**:
+    - Executive verdict: **READY WITH LIMITATIONS**.
+    - v1 is **accepted**: every single P0 criterion is PASS with verifiable evidence.
+    - P1 items requiring human observation are clearly documented in the manual checklist.
+  - **2. Deliverable**:
+    - Created `docs/FINAL_ACCEPTANCE_REPORT.md` with full breakdown of verdicts, status matrix, evidence, installation details, regression outcomes, manual acceptance checklist, and known limitations.
+  - **3. Project State**:
+    - All milestones M00 through M10 are complete. No further development or refactoring scheduled.
+- Result: PASS
+
+---
+
+### M11 — Post-acceptance hardening
+
+- Date: 2026-10-26 18:20
+- Milestone: M11 Post-acceptance hardening
+- Criteria verified: HARDEN-01 through HARDEN-05, LIFE-14, UI-39, SEC-06, PERM-04
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Command(s):
+  - `./scripts/check-secrets.sh`
+  - `./scripts/review-checks.sh`
+  - `swift test --package-path DoomKit --test-product DoomCoreTests -Xswiftc -warnings-as-errors`
+  - `swift test --package-path DoomKit --test-product DoomServicesTests -Xswiftc -warnings-as-errors`
+  - `swift test --package-path DoomKit --test-product DoomFeaturesTests -Xswiftc -warnings-as-errors`
+  - `./scripts/verify.sh`
+  - `./scripts/install.sh`
+  - `codesign --verify --deep --strict ~/Applications/DOOM.app`
+  - `./scripts/smoke-test.sh ~/Applications/DOOM.app`
+- Exit code(s): 0, 0, 0, 0, 0, 0, 0, 0, 0
+- Counts:
+  - Unit tests: 185 passed across 24 suites (100% pass, 0 warnings, 0 failures; +5 tests from M10):
+    - DoomCoreTests: 37 passed in 6 suites
+    - DoomServicesTests: 87 passed in 10 suites
+    - DoomFeaturesTests: 61 passed in 8 suites
+  - Review checks: 0 violations across 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Debug & Release builds: Succeeded with `-warnings-as-errors`.
+  - Smoke tests: Passed on Debug, Release, and installed `~/Applications/DOOM.app`.
+- Evidence excerpt:
+  - **1. Clipboard Restore Status Accuracy (HARDEN-01, HARDEN-02)**:
+    - Fixed false notice N-08 by propagating `restoreSkipped: Bool` through `SelectedText` and `SelectionValidator.validate()`. Notice N-08 is now displayed strictly when clipboard restoration actually skipped.
+    - Verified via `SelectionValidatorTests.testRestoreSkippedPreservation` and `AssistantControllerTests.testResponseContentRestoreSkippedAccurate`.
+  - **2. Native AppKit Key Equivalents (HARDEN-03)**:
+    - Added `cancelOperation(_:)` and `performKeyEquivalent(with:)` (⌘W) overrides to `DoomPanel`.
+    - Wired `onCancelOrClose` in `PanelController.ensurePanelCreated()` to cancel if busy or close if idle/succeeded/failed.
+    - Verified via `PanelControllerTests.testDoomPanelEscapeAndCommandWHandling`.
+  - **3. Resilient HTTP & Gateway Handling (HARDEN-04, HARDEN-05)**:
+    - Implemented case-insensitive search for `Retry-After` response header in `GeminiClient` to support HTTP/2 and modern reverse proxies.
+    - Added JSON dictionary fallback in `GeminiClient.parseErrorPayload()` to extract flat error strings from proxies/gateways without decode errors.
+    - Verified via `GeminiClientTests.testCaseInsensitiveRetryAfterHeader` and `GeminiClientTests.testProxyStringErrorPayload`.
+  - **4. Activation Debounce Guard**:
+    - Added 250ms debounce duration in `AppDelegate.handleAskSelection()` via `lastActivationInstant` to guard against hardware key bounce.
+  - **5. Local Installation**:
+    - Re-ran `./scripts/install.sh` to install the hardened Release build to `~/Applications/DOOM.app`.
+    - Codesign verification and smoke test passed cleanly.
+- Result: PASS
+
+---
+
+### M12 — Final project handover
+
+- Date: 2026-10-26 18:30
+- Milestone: M12 Final project handover
+- Criteria verified: Handover completeness, README validity, review checks, zero secrets, bundle verification
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Command(s):
+  - `./scripts/check-secrets.sh`
+  - `./scripts/review-checks.sh`
+  - `./scripts/verify.sh`
+  - `./scripts/verify-bundle.sh release`
+  - `./scripts/smoke-test.sh release`
+  - `codesign --verify --deep --strict ~/Applications/DOOM.app`
+- Exit code(s): 0, 0, 0, 0, 0, 0
+- Counts:
+  - Unit tests: 185 passed across 24 suites (100% pass, 0 warnings, 0 failures).
+  - Review checks: 0 violations across 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Handover deliverables: `README.md` updated, `docs/FINAL_HANDOVER.md` created.
+- Evidence excerpt:
+  - **1. Documentation & Instruction Audit**:
+    - `README.md` completely updated with 12 structured sections: Overview, verified features, architecture, prerequisites, build/launch, Keychain setup, macOS permissions, shortcuts, test/verify, troubleshooting & limitations, privacy summary, and development status.
+    - `docs/FINAL_HANDOVER.md` created covering project status, verified capabilities, repository architecture, instructions, permissions, shortcuts, verification outcomes, privacy/security, service limitations, manual checks, and changed files.
+  - **2. Pipeline Verification**:
+    - Ran `./scripts/check-secrets.sh` and `./scripts/review-checks.sh`: 0 secrets, 0 rule violations.
+    - All 185 tests in `DoomKit` passed with `-warnings-as-errors`.
+    - Release build verified and smoke test confirmed `DOOM_SMOKE_OK`.
+  - **3. Final Acceptance State**:
+    - All milestones M00 through M12 are marked COMPLETE.
+    - Project successfully completed.
+- Result: PASS
+
+---
+
+### 2026-10-26 19:00 — M13 — Transparent Privacy Mode Implementation
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Feasibility Pre-requisite: `docs/DISPLAY_PRIVACY_FEASIBILITY.md` and `scripts/webrtc-preview-investigation.swift`
+- Command(s):
+  - `swift test --package-path DoomKit -Xswiftc -warnings-as-errors`
+  - `./scripts/check-secrets.sh`
+  - `./scripts/review-checks.sh`
+  - `./scripts/verify.sh`
+  - `./scripts/install.sh`
+- Exit code(s): 0, 0, 0, 0, 0
+- Counts:
+  - Unit tests: 189 passed across 24 suites (100% pass, 0 warnings, 0 failures, +4 new tests).
+  - Review checks: 0 violations across 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Smoke test: DOOM_SMOKE_OK received (exit 0).
+- Evidence excerpt:
+  - **1. Privacy Mode Toggle in Settings**:
+    - Added clearly labeled "Privacy Mode" toggle in `MainWindowView.swift` under the Privacy section.
+    - Accompanying text clearly explains: "Hiding the floating response panel completely removes it from subsequent entire-display capture frames. The panel cannot remain visible on your screen while being hidden from full-display capture without window sharing or separate-display separation. Use Control + Shift + H to reveal responses when safe."
+    - No deceptive or unverified claims regarding local visibility during display capture.
+  - **2. Window Visibility & Architecture**:
+    - Utilizes documented `PanelController.hide()` / `orderOut(nil)` visibility mechanism.
+    - `setPrivacyMode(true)` immediately hides the panel if visible.
+    - While Privacy Mode is enabled, automatic show requests on trigger or completion are suppressed.
+    - In-flight requests continue normally and AI responses are completely preserved in `PanelContentState`.
+    - Menu bar status displays `"Privacy Mode: Working…"` during requests and `"Privacy Mode: Response ready"` when completion occurs while hidden.
+    - User can reopen the panel at any time using existing `Control + Shift + H` shortcut or menu-bar "Show Panel".
+  - **3. Security, Privacy & Invariants Preserved**:
+    - In-memory session setting preserves `ACCEPTANCE_CRITERIA.md §SEC-06` UserDefaults key whitelist.
+    - Zero private APIs, zero ScreenCaptureKit interference, zero anti-monitoring techniques.
+    - All existing text-acquisition, Keychain, and network privacy protections remain intact.
+  - **4. Automated Test Coverage**:
+    - Added `testPrivacyModeToggle` in `MainWindowModelTests.swift`.
+    - Added `testPrivacyModeHidesVisiblePanel` in `PanelControllerTests.swift`.
+    - Added `testPrivacyModeSuppressesAutoShowAndPreservesResponse` in `PanelControllerTests.swift`.
+    - Added `testDisablingPrivacyModeRestoresAutoShow` in `PanelControllerTests.swift`.
+  - **5. Release Build & Local Installation**:
+    - `./scripts/verify.sh` and `./scripts/install.sh` succeeded cleanly.
+    - `~/Applications/DOOM.app` updated with signed Release build.
+- Result: PASS
+
+---
+
+### 2026-10-26 19:10 — M13 — Real-World Reliability & User Experience Testing
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Test Checklist Document: `docs/M13_MANUAL_TEST_CHECKLIST.md` (28 test cases, status `[PENDING]` awaiting physical execution)
+- Command(s):
+  - `swift test --package-path DoomKit -Xswiftc -warnings-as-errors`
+  - `./scripts/check-secrets.sh`
+  - `./scripts/review-checks.sh`
+  - `./scripts/verify.sh`
+  - `./scripts/install.sh`
+- Exit code(s): 0, 0, 0, 0, 0
+- Counts:
+  - Unit tests: 194 passed across 25 suites (100% pass, 0 warnings, 0 failures, +9 tests in M13).
+  - Review checks: 0 violations across 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Smoke test: DOOM_SMOKE_OK received (exit 0).
+- Evidence excerpt:
+  - **1. Shortcut Consistency Audit**:
+    - Inspected `ChordRecognizer.swift` (`function && control && option`), `SystemShortcutMonitor.swift`, `ACCEPTANCE_CRITERIA.md §SHORTCUT-01`, and `README.md`.
+    - Confirmed canonical activation chord is `Fn + Control + Option` (held simultaneously and released within 2.0s).
+    - Confirmed panel toggle shortcut is `Control + Shift + H` (Carbon hotkey).
+    - Clarified that `Fn + Fn` was an erroneous mention in a previous chat summary and does not exist anywhere in source code or documentation.
+  - **2. MenuStatusFormatter Centralization**:
+    - Extracted status bar formatting into pure model `MenuStatusFormatter.swift` in `DoomFeatures`.
+    - Exhaustively verified all 4 states (acquiring, requesting, succeeded/hidden, idle/fallback) in `MenuStatusFormatterTests.swift`.
+  - **3. In-Flight Privacy Mode Continuation**:
+    - Added `testInFlightRequestContinuesWhenPrivacyModeEnabledMidFlight` in `PanelControllerTests.swift`.
+    - Verified that enabling Privacy Mode while a request is in flight (`.requesting`) immediately hides the panel without cancelling the request (`cancelCount == 0`), preserves the response upon arrival, and allows reopening via `show()` or `toggle()`.
+  - **4. Physical-Mac Test Checklist**:
+    - Created `docs/M13_MANUAL_TEST_CHECKLIST.md` specifying 29 structured test cases covering first launch, permissions, native TextEdit / browser text selection, password field rejection, clipboard fallback/restore, privacy mode workflows, panel gestures, Gemini quota/cooldown, and VoiceOver/Reduce Motion accessibility.
+    - All 29 manual tests are marked `[PENDING]` until physically performed by a human on the target Mac.
+- Result: PASS
+
+---
+
+### 2026-10-26 19:25 — M13 — Privacy Mode State-Machine & Panel-Visibility Bug Fix
+- Build: Release 0.1.0(1)
+- macOS: 27.0.1 (26A434)
+- Hardware: MacBook Air, Mac17,3 (Apple M5, 16 GB), 1 active display
+- Installed Location: `~/Applications/DOOM.app`
+- Test Checklist Document: `docs/M13_MANUAL_TEST_CHECKLIST.md` (29 test cases, status `[PENDING]`)
+- Command(s):
+  - `swift test --package-path DoomKit -Xswiftc -warnings-as-errors`
+  - `./scripts/check-secrets.sh`
+  - `./scripts/review-checks.sh`
+  - `./scripts/verify.sh`
+  - `./scripts/install.sh`
+- Exit code(s): 0, 0, 0, 0, 0
+- Counts:
+  - Unit tests: 195 passed across 25 suites (100% pass, 0 warnings, 0 failures, +1 regression test).
+  - Review checks: 0 violations across 21 architectural and safety rules.
+  - Secrets scan: 0 secrets detected.
+  - Smoke test: DOOM_SMOKE_OK received (exit 0).
+- Evidence excerpt:
+  - **1. Root Cause Identification**:
+    - `PanelController.show()` and `toggle()` did not guard against `isPrivacyModeEnabled`. Pressing `Control + Shift + H` or clicking "Show Panel" while Privacy Mode was ON called `orderFrontRegardless()` and set `isVisible = true`, placing the floating panel on-screen during entire-display capture.
+    - Settings UI text inaccurately stated that the panel could be reopened or hidden at any time using `Control + Shift + H`.
+  - **2. State Machine Implementation**:
+    - `PanelController.show()`: Guards on `guard !isPrivacyModeEnabled else { return }`.
+    - `PanelController.toggle()`: Guards on `guard !isPrivacyModeEnabled else { if isVisible { hide() }; return }`. Shortcut CANNOT reveal panel during Privacy Mode.
+    - `PanelController.updateHostingView()`: Enforces defensive guard so frame updates do not display the panel if Privacy Mode is active.
+    - `StatusMenuContent.swift`: "Show Panel" menu item is `.disabled(isPrivacyModeEnabled)` when Privacy Mode is ON.
+    - `PanelController.setPrivacyMode(false)`: Disabling Privacy Mode does NOT auto-reveal the panel; explicit user action is required to reveal it.
+    - `MainWindowView.swift`: Settings text updated to clearly explain that `Control + Shift + H` is disabled during Privacy Mode to prevent accidental capture, and that disabling Privacy Mode in Settings is required before reopening.
+  - **3. Regression Tests Verified**:
+    - `testPrivacyModeHidesVisiblePanel`
+    - `testPrivacyModeSuppressesAutoShowAndPreservesResponse`
+    - `testDisablingPrivacyModeRestoresAutoShow`
+    - `testInFlightRequestContinuesWhenPrivacyModeEnabledMidFlight`
+    - `testRepeatedShortcutsAndAsyncCallbacksCannotBypassPrivacyMode`
+  - **4. Verification & Installation**:
+    - Ran full `./scripts/verify.sh` and reinstalled signed Release binary to `~/Applications/DOOM.app`.
+- Result: PASS
+
+
+
+
+

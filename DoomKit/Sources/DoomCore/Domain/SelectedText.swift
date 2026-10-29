@@ -10,16 +10,19 @@ public struct SelectedText: Equatable, Sendable {
     public let characterCount: Int
     public let source: SourceApplication
     public let method: AcquisitionMethod
+    public let restoreSkipped: Bool
 
     public init(
         value: String,
         characterCount: Int,
         source: SourceApplication,
-        method: AcquisitionMethod
+        method: AcquisitionMethod,
+        restoreSkipped: Bool = false
     ) {
         self.value = value
         self.characterCount = characterCount
         self.source = source
         self.method = method
+        self.restoreSkipped = restoreSkipped
     }
 }
